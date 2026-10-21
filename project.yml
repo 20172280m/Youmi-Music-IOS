@@ -133,6 +133,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.cilicili.tests
+        GENERATE_INFOPLIST_FILE: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
   BeansTests:
     type: bundle.unit-test
@@ -146,6 +147,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.tests
+        GENERATE_INFOPLIST_FILE: YES
   BeansUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -157,6 +159,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.uitests
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   Beans:
@@ -172,4 +175,13 @@ schemes:
         - BeansTests
         - CiliCiliTests
         - BeansUITests
+  BeansUnitTests:
+    build:
+      targets:
+        Beans: all
+    test:
+      config: Debug
+      targets:
+        - BeansTests
+        - CiliCiliTests
 
