@@ -225,6 +225,8 @@ struct LibraryView: View {
                                         Text(webDAVEntryTitle)
                                             .font(BeansFont.appFont(15, .semibold))
                                             .foregroundStyle(Color.beansLabel)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
                                         Text(webDAVEntrySubtitle)
                                             .font(BeansFont.appFont(12))
                                             .foregroundStyle(Color.beansComment)
