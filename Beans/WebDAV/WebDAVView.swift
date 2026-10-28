@@ -26,6 +26,7 @@ struct WebDAVView: View {
     @State private var showRestore = false
     @State private var message: String?
     @State private var editingConnection = false
+    @State private var lastLoadFailed = false
 
     var body: some View {
         NavigationStack {
@@ -50,15 +51,20 @@ struct WebDAVView: View {
             .task { restoreConnection() }
             .confirmationDialog("移除此 WebDAV 连接？", isPresented: $showDisconnect) {
                 Button("移除连接", role: .destructive) {
-                    do { try store.disconnect(); directory = nil; entries = [] }
-                    catch { errorMessage = error.localizedDescription }
+                    do {
+                        try store.disconnect()
+                        // 移除连接后表单要回到空白，否则残留上一台的地址和账号，看起来像已经连上了。
+                        directory = nil; entries = []; folders = []; message = nil
+                        address = ""; username = ""; password = ""; allowHTTP = false
+                    }
+                    catch { errorMessage = WebDAVError.message(for: error) }
                 }
             }
             .confirmationDialog("清理 WebDAV 音乐缓存？", isPresented: $showClearCache) {
                 Button("清理缓存", role: .destructive) {
                     Task {
                         do { try await WebDAVAudioCache.shared.clear() }
-                        catch { errorMessage = error.localizedDescription }
+                        catch { errorMessage = WebDAVError.message(for: error) }
                     }
                 }
             }
@@ -98,7 +104,7 @@ struct WebDAVView: View {
                     editingConnection = false
                     folders = []
                     Task { await load() }
-                } catch { errorMessage = error.localizedDescription }
+                } catch { errorMessage = WebDAVError.message(for: error) }
             }
             .disabled(address.isEmpty || username.isEmpty || password.isEmpty)
         } header: { Text("连接服务器") } footer: {
@@ -128,14 +134,19 @@ struct WebDAVView: View {
                         do {
                             let audio = entries.filter { !$0.isDirectory && $0.isAudio }
                             let songs = try audio.map(song(for:))
-                            player.play(songs: songs, startAt: audio.firstIndex(of: entry) ?? 0)
-                        } catch { errorMessage = error.localizedDescription }
+                            let start = audio.firstIndex(of: entry) ?? 0
+                            BeansLogger.shared.log("WebDAV 点歌：\(entry.name)（\(songs.count) 首，起始 \(start)）", level: .info)
+                            player.play(songs: songs, startAt: start)
+                        } catch {
+                            BeansLogger.shared.log("WebDAV 点歌失败：\(entry.name)｜\(error.localizedDescription)", level: .error)
+                            errorMessage = WebDAVError.message(for: error)
+                        }
                     } label: { Label(entry.name, systemImage: "music.note") }
                     .contextMenu {
                         Button("收藏到本地歌单", systemImage: "heart") {
                             do {
                                 message = LocalLibraryStore.shared.addToDefaultFavorites(try song(for: entry))
-                            } catch { errorMessage = error.localizedDescription }
+                            } catch { errorMessage = WebDAVError.message(for: error) }
                         }
                     }
                 } else if entry.url.pathExtension.lowercased() == "json" {
@@ -145,13 +156,24 @@ struct WebDAVView: View {
                     .disabled(transferInProgress)
                 }
             }
-            if !loading && entries.isEmpty { Text("目录中没有可播放的音频文件").foregroundStyle(.secondary) }
+            // 连不上和"目录里真的没有音频"是两回事，别用同一句话糊过去。
+            if !loading && !lastLoadFailed && !hasRenderableEntry {
+                Text("目录中没有可播放的音频文件").foregroundStyle(.secondary)
+            }
         } header: {
             HStack {
                 Text("文件")
                 Spacer()
                 Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") }
             }
+        }
+    }
+
+    /// 目录里只有视频、图片这类不可播文件时，列表是空的——也要给出空态提示，
+    /// 否则看起来像"连上了但什么都没加载出来"。
+    private var hasRenderableEntry: Bool {
+        entries.contains { entry in
+            entry.isDirectory || entry.isAudio || entry.url.pathExtension.lowercased() == "json"
         }
     }
 
@@ -196,7 +218,7 @@ struct WebDAVView: View {
             _ = try await client.uploadBackup(data, fileName: path)
             message = "备份已上传并通过回读校验。"
             await load()
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = WebDAVError.message(for: error) }
     }
 
     private func prepareRestore(_ url: URL) async {
@@ -207,7 +229,7 @@ struct WebDAVView: View {
             let data = try await client.downloadBackup(url)
             pendingRestore = try WebDAVBackup.validated(data)
             showRestore = true
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = WebDAVError.message(for: error) }
     }
 
     private func restoreConnection() {
@@ -218,7 +240,7 @@ struct WebDAVView: View {
         do {
             directory = try WebDAVPaths.root(for: connection)
             Task { await load() }
-        } catch { errorMessage = error.localizedDescription }
+        } catch { errorMessage = WebDAVError.message(for: error) }
     }
 
     private func load() async {
@@ -229,6 +251,7 @@ struct WebDAVView: View {
             let client = try store.client()
             let listed = try await client.list(directory: directory)
             guard self.directory == directory else { return }
+            lastLoadFailed = false
             entries = listed.sorted { left, right in
                 if left.isDirectory != right.isDirectory { return left.isDirectory }
                 return left.name.localizedStandardCompare(right.name) == .orderedAscending
@@ -236,7 +259,8 @@ struct WebDAVView: View {
         } catch {
             guard self.directory == directory else { return }
             entries = []
-            errorMessage = error.localizedDescription
+            lastLoadFailed = true
+            errorMessage = WebDAVError.message(for: error)
         }
     }
 }

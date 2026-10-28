@@ -32,9 +32,10 @@ struct BeansLogEntry: Identifiable, Equatable {
 
 // MARK: - 全局日志中心
 
-/// 全局日志中心：内存环形缓存（供 App 内查看）+ 文件持久化（Documents/BeansLogs/beans-日期.log，可导出分享）。
+/// 全局日志中心：内存环形缓存（供 App 内查看）+ 文件持久化（Application Support/BeansDiagnostics/beans-日期.log，可导出分享）。
 /// 任意线程可调用 log()，界面更新自动切回主线程。
 final class BeansLogger: ObservableObject {
+
     static let shared = BeansLogger()
 
     @Published private(set) var entries: [BeansLogEntry] = []
@@ -42,6 +43,9 @@ final class BeansLogger: ObservableObject {
     private let maxEntries = 5000
     private let maxLogFileBytes = 10 * 1024 * 1024
     private let lock = NSLock()
+    private let diskQueue = DispatchQueue(label: "Beans.Logger.disk", qos: .utility)
+    private let directory: URL
+    private var generation: UInt64 = 0
     private var recentEntries: [BeansLogEntry] = []
 
     private static let lineFormatter: DateFormatter = {
@@ -55,8 +59,9 @@ final class BeansLogger: ObservableObject {
         return f
     }()
 
-    private init() {
-        log("Beans Music 启动（版本 \(Self.appVersion)）", level: .info)
+    init(directory: URL = BeansDiagnostics.logDirectoryURL, logStartup: Bool = true) {
+        self.directory = directory
+        if logStartup { log("Beans Music 启动（版本 \(Self.appVersion)）", level: .info) }
     }
 
     static var appVersion: String {
@@ -64,7 +69,9 @@ final class BeansLogger: ObservableObject {
     }
 
     static func dateString(_ date: Date) -> String {
-        lineFormatter.string(from: date)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        return formatter.string(from: date)
     }
 
     /// 记录一条日志（任意线程可调用）
@@ -76,11 +83,11 @@ final class BeansLogger: ObservableObject {
             recentEntries.removeFirst(recentEntries.count - maxEntries)
         }
         let snapshot = recentEntries
+        let token = generation
+        // Enqueue while holding the same lock as clear, preserving log/clear order.
+        diskQueue.async { [self] in write(entry.line) }
         lock.unlock()
-        DispatchQueue.main.async { [weak self] in
-            self?.entries = snapshot
-        }
-        write(entry.line)
+        publish(snapshot, token: token)
     }
 
     /// 全部日志文本（按时间正序）
@@ -91,42 +98,79 @@ final class BeansLogger: ObservableObject {
         return snapshot.map(\.line).joined(separator: "\n")
     }
 
-    /// 清空内存日志与日志文件
+    /// Existing UI entry point; cache management uses the throwing async API below.
     func clear() {
-        lock.lock()
-        recentEntries = []
-        lock.unlock()
-        DispatchQueue.main.async { [weak self] in
-            self?.entries = []
+        Task {
+            do { try await clearCache() }
+            catch { log("日志清理失败：\(error.localizedDescription)", level: .error) }
         }
-        try? FileManager.default.removeItem(at: logDirectory)
-        log("日志已清空", level: .info)
     }
 
-    // MARK: - 文件持久化
-
-    private var logDirectory: URL {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("BeansLogs", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
+    func clearCache() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            diskQueue.async { [self] in
+                lock.lock()
+                defer { lock.unlock() }
+                do {
+                    try BeansCacheFiles.clearContents(of: directory, under: directory.deletingLastPathComponent())
+                    recentEntries.removeAll()
+                    generation &+= 1
+                    publish([], token: generation)
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
+        }
     }
+
+    func cacheDiskBytes() async throws -> Int64 {
+        try await withCheckedThrowingContinuation { continuation in
+            diskQueue.async { [self] in
+                do { continuation.resume(returning: try BeansCacheFiles.bytes(in: directory, under: directory.deletingLastPathComponent())) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
+    private func publish(_ snapshot: [BeansLogEntry], token: UInt64) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lock.lock()
+            let isCurrent = self.generation == token
+            self.lock.unlock()
+            if isCurrent { self.entries = snapshot }
+        }
+    }
+
+    // MARK: - 文件持久化 (diskQueue only)
 
     private var currentFileURL: URL {
-        logDirectory.appendingPathComponent("beans-\(Self.fileStampFormatter.string(from: Date())).log")
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        return directory.appendingPathComponent("beans-\(formatter.string(from: Date())).log")
     }
 
     /// 导出日志文件（不存在则先生成一份完整日志）
     func exportLogURL() -> URL {
-        let url = currentFileURL
-        if !FileManager.default.fileExists(atPath: url.path) {
-            try? fullText.write(to: url, atomically: true, encoding: .utf8)
+        let text = fullText
+        return diskQueue.sync {
+            let url = currentFileURL
+            guard (try? BeansCacheFiles.validateDirectory(directory, under: directory.deletingLastPathComponent())) != nil else { return url }
+            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try? text.write(to: url, atomically: true, encoding: .utf8)
+            }
+            return url
         }
-        return url
     }
 
     private func write(_ line: String) {
+        guard (try? BeansCacheFiles.validateDirectory(directory, under: directory.deletingLastPathComponent())) != nil else { return }
+        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        catch { return }
         let url = currentFileURL
+        // Refuse a symlink at the final log file too.
+        if let type = try? FileManager.default.attributesOfItem(atPath: url.path)[.type] as? FileAttributeType,
+           type != .typeRegular { return }
         // 单日日志过大时轮转到 .1，避免无限膨胀
         let fileSize = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue ?? 0
         if fileSize > maxLogFileBytes {

@@ -1985,7 +1985,6 @@ struct SettingsView: View {
     @State private var backupIncludeAccounts = false
     @State private var backupIncludeWallpapers = false
     @State private var backupMessage: String?
-    @State private var clearingImageCache = false
     @State private var showAccountHub = false
     @State private var showFeedback = false
     @State private var showDiagnostics = false
@@ -2526,7 +2525,7 @@ struct SettingsView: View {
     private var showAudioSettings: Bool { settingsMatches("音源 音质 网络 Wi-Fi 蜂窝 导入") }
     private var showPlaybackSettings: Bool { settingsMatches("播放 触感 锁屏 灵动岛 收藏") }
     private var showEqualizerSettings: Bool { settingsMatches("均衡器 音效") }
-    private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
+    private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存 图片 沉浸 元数据 歌词 网络 哔哩哔哩 日志 backup restore cache storage") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
     private var showSupportSettings: Bool { settingsMatches("帮助 反馈 声明 检查更新 诊断 日志 崩溃 卡死") }
     private var hasSettingsSearchResults: Bool {
@@ -2565,7 +2564,11 @@ struct SettingsView: View {
     private var utilitySettingsGroup: some View {
         if showBackupSettings || showChangelogSettings || showSupportSettings {
             SettingsCatalogGroup {
-                if showBackupSettings { backupSection }
+                if showBackupSettings {
+                    backupSection
+                    catalogDivider
+                    BeansCacheSettingsSection()
+                }
                 if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
                 if showChangelogSettings { changelogSection }
                 if showChangelogSettings && showSupportSettings { catalogDivider }
@@ -4269,18 +4272,6 @@ struct SettingsView: View {
                     showRestorePicker = true
                 }
             }
-            backupActionButton(
-                icon: clearingImageCache ? "arrow.triangle.2.circlepath" : "trash",
-                title: clearingImageCache ? "正在清除图片缓存…" : "清除图片缓存"
-            ) {
-                guard !clearingImageCache else { return }
-                clearingImageCache = true
-                BeansCoverImageStore.clearCache { success in
-                    clearingImageCache = false
-                    backupMessage = success ? "已清除封面图片缓存" : "清除图片缓存失败"
-                }
-            }
-            .disabled(clearingImageCache)
             if let backupMessage {
                 Text(backupMessage)
                     .font(BeansFont.appFont(11))

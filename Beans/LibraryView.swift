@@ -71,6 +71,7 @@ struct LibraryView: View {
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var bilibiliAuth = BilibiliAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var webDAVStore = WebDAVStore.shared
 
     @State private var showHistory = false
     @State private var showWebDAV = false
@@ -165,6 +166,17 @@ struct LibraryView: View {
         )
     }
 
+    /// 音乐库里的 WebDAV 入口：没连接时如实写「未连接」，连上后用服务器名，
+    /// 免得一行「WebDAV 音乐」看起来像已经在线。
+    private var webDAVEntryTitle: String {
+        guard let connection = webDAVStore.connection else { return "WebDAV 音乐" }
+        return URL(string: connection.address)?.host ?? connection.address
+    }
+
+    private var webDAVEntrySubtitle: String {
+        webDAVStore.connection == nil ? "未连接" : "已连接"
+    }
+
     private var isNativeClean: Bool {
         BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
     }
@@ -206,9 +218,18 @@ struct LibraryView: View {
                             Button {
                                 showWebDAV = true
                             } label: {
-                                Label("WebDAV 音乐", systemImage: "externaldrive.connected.to.line.below")
-                                    .font(BeansFont.appFont(15, .semibold))
-                                    .foregroundStyle(Color.beansLabel)
+                                HStack(spacing: 10) {
+                                    Image(systemName: "externaldrive.connected.to.line.below")
+                                        .foregroundStyle(Color.beansAmber)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(webDAVEntryTitle)
+                                            .font(BeansFont.appFont(15, .semibold))
+                                            .foregroundStyle(Color.beansLabel)
+                                        Text(webDAVEntrySubtitle)
+                                            .font(BeansFont.appFont(12))
+                                            .foregroundStyle(Color.beansComment)
+                                    }
+                                }
                             }
                         case "我的歌单":
                             switch source {

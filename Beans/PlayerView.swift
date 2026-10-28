@@ -45,7 +45,7 @@ struct PlayerView: View {
     @AppStorage(FoliaPreferences.enabledKey) private var foliaStageEnabled = false
     @AppStorage(FoliaPreferences.modeKey) private var foliaModeRaw = FoliaVisualizerMode.still.rawValue
     @State private var playbackRenderingSuppressed = false
-    @State private var showArtistHome = false
+
     @State private var pickedArtistName = ""
     @State private var showArtistPicker = false
     @State private var vinylFocusedLyricIndex: Int?
@@ -1040,18 +1040,24 @@ struct PlayerView: View {
                 AddToLocalPlaylistSheet(song: song)
             }
         }
-        .sheet(isPresented: $showArtistHome) {
-            if !pickedArtistName.isEmpty {
-                ArtistHomeSheet(artistName: pickedArtistName, artistSource: song?.source ?? .netease)
-                    .environmentObject(player)
-            }
-        }
+        // 歌手主页用全屏覆盖而不是 sheet：播放页本身是全屏覆盖，再叠一层 sheet
+        // 时弹层窗口收不到点击，页面能看不能点。
+        // 不再用“全屏覆盖上再叠全屏覆盖”：第二次进入时主线程会被占死（2026-10-22 复现三次）。
+        // 改成在播放页内部直接铺一层覆盖视图，不产生新的 presentation。
         .confirmationDialog("选择歌手", isPresented: $showArtistPicker, titleVisibility: .visible) {
             ForEach(Array(artistNames.enumerated()), id: \.offset) { _, name in
                 Button(name) {
                     pickedArtistName = name
                     BeansHaptics.tap()
-                    showArtistHome = true
+                    // 选择框正在收起的同一帧里再去弹全屏覆盖，第二次进入歌手页时
+                    // 会出现主线程被占死的卡顿（2026-10-22 复现）。等收起动画结束再弹。
+                    let name = pickedArtistName
+                    let source = song?.source ?? .netease
+                    // 先把播放页收起来再铺歌手页：歌手页只由根视图铺一份，不能和播放页各铺一份。
+                    isPresented = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        ArtistPresentation.shared.present(name: name, source: source)
+                    }
                 }
             }
             Button("取消", role: .cancel) {}
@@ -5142,6 +5148,7 @@ struct PlayerView: View {
     // MARK: - 动作
 
     /// 全部歌手名（多歌手歌曲点击时弹出选择，避免只打开第一位）
+
     private var artistNames: [String] {
         guard let artists = song?.artists else { return [] }
         let separators = [" / ", "/", "、", ",", "，", " & ", " &", "& ", " feat. ", " Feat. ", " ft. ", " Ft. "]
@@ -5166,7 +5173,13 @@ struct PlayerView: View {
             showArtistPicker = true
         } else {
             pickedArtistName = primaryArtistName
-            showArtistHome = true
+            let name = pickedArtistName
+            let source = song?.source ?? .netease
+            // 同上：先收起播放页，再由根视图铺歌手页，保证全应用只有一份。
+            isPresented = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                ArtistPresentation.shared.present(name: name, source: source)
+            }
         }
     }
 
@@ -5287,9 +5300,12 @@ struct PlayerView: View {
     private func loadLyrics() async {
         guard let song else { return }
         let identity = song.identityKey
-        func apply(_ parsed: [LyricLine]) {
+        func apply(_ parsed: [LyricLine], wordPayloadBytes: Int? = nil, format: LyricWordFormat? = nil) {
             guard self.song?.identityKey == identity, !parsed.isEmpty else { return }
             self.lyrics = parsed
+            // 悬浮歌词调试要看到“界面实际在用”的这份歌词，而不是另读一份缓存。
+            LyricDebugOverlayWindow.shared.updateLyrics(parsed, forSongKey: identity,
+                                                        wordPayloadBytes: wordPayloadBytes, wordFormat: format)
         }
 
         if song.source == .webdav {
@@ -5322,7 +5338,7 @@ struct PlayerView: View {
                 translationRaw: cached.translation,
                 wordRaw: cached.wordTiming,
                 wordFormat: cached.wordFormat
-            ))
+            ), wordPayloadBytes: cached.wordTiming?.utf8.count, format: cached.wordFormat)
         }
 
         if song.source == .kugou, let hash = song.kugouHash {
@@ -5331,11 +5347,13 @@ struct PlayerView: View {
                 duration: song.duration,
                 keyword: "\(song.name) \(song.artists)"
             )
-            apply(LyricParser.parse(payload.lrc, wordRaw: payload.krc, wordFormat: .kugouKRC))
+            apply(LyricParser.parse(payload.lrc, wordRaw: payload.krc, wordFormat: .kugouKRC),
+                  wordPayloadBytes: payload.krc.map { $0.utf8.count }, format: .kugouKRC)
             LyricsCache.shared.save(lyric: payload.lrc, translation: nil, wordTiming: payload.krc, wordFormat: .kugouKRC, for: cacheKey)
         } else if song.source == .qq, let mid = song.qqMid {
             if let payload = try? await QQMusicAPI.shared.lyricPayload(songmid: mid) {
-                apply(LyricParser.parse(payload.lrc ?? "", wordRaw: payload.qrc, wordFormat: .qqQRC))
+                apply(LyricParser.parse(payload.lrc ?? "", wordRaw: payload.qrc, wordFormat: .qqQRC),
+                      wordPayloadBytes: payload.qrc.map { $0.utf8.count }, format: .qqQRC)
                 LyricsCache.shared.save(lyric: payload.lrc ?? "", translation: nil, wordTiming: payload.qrc, wordFormat: .qqQRC, for: cacheKey)
             }
         } else if song.source == .kuwo || song.source == .migu {
@@ -5370,7 +5388,8 @@ struct PlayerView: View {
             }
         } else {
             if let (lrc, tlyric, yrc) = try? await NetEaseAPI.shared.lyricWithTranslation(id: song.id) {
-                apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric, wordRaw: yrc, wordFormat: .neteaseYRC))
+                apply(LyricParser.parse(lrc ?? "", translationRaw: tlyric, wordRaw: yrc, wordFormat: .neteaseYRC),
+                      wordPayloadBytes: yrc?.utf8.count, format: .neteaseYRC)
                 if let lrc, !lrc.isEmpty {
                     LyricsCache.shared.save(lyric: lrc, translation: tlyric, wordTiming: yrc, wordFormat: .neteaseYRC, for: cacheKey)
                 }

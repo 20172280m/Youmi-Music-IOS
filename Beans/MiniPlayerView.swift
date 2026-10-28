@@ -180,7 +180,10 @@ struct MiniPlayerView: View {
         }
         guard !Task.isCancelled, let raw else { return }
         guard player.currentSong?.identityKey == identity else { return }
-        miniLyrics = LyricParser.parse(raw)
+        let parsed = LyricParser.parse(raw)
+        miniLyrics = parsed
+        // 根页面没打开全屏播放页时，迷你播放器是唯一的歌词来源；调试窗跟它走。
+        LyricDebugOverlayWindow.shared.updateLyrics(parsed, forSongKey: identity)
     }
 }
 

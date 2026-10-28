@@ -179,7 +179,7 @@ extension BiliAPIClient {
             path: "/x/player/playurl",
             query: query,
             referer: referer,
-            userAgent: userAgent(for: streamSource),
+            userAgent: Self.mobileUserAgent,
             cookieHeader: await anonymousCookieHeader(purpose: .playback),
             cachePolicy: .reloadIgnoringLocalCacheData
         )

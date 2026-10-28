@@ -17,6 +17,7 @@ struct PlaylistSquarePage {
 
 /// 歌单广场缓存：按平台、分类和网易云登录态隔离，避免切换页面重复刷新。
 final class PlaylistSquareCache {
+
     static let shared = PlaylistSquareCache()
 
     struct Entry: Codable {
@@ -29,11 +30,16 @@ final class PlaylistSquareCache {
     // 分类请求和平台隔离规则变化后，不能继续读取旧版可能混入的分类缓存。
     private let ttl: TimeInterval = 30 * 60
 
-    private init() {}
+    private let defaults: UserDefaults
+    private let lock = NSLock()
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     func entry(provider: SearchProvider, category: PlaylistSquareCategory, loggedIn: Bool) -> Entry? {
+        lock.lock()
+        defer { lock.unlock() }
         let key = cacheKey(provider: provider, category: category, loggedIn: loggedIn)
-        guard let data = UserDefaults.standard.data(forKey: key),
+        guard let data = defaults.data(forKey: key),
               let entry = try? JSONDecoder().decode(Entry.self, from: data) else {
             return nil
         }
@@ -52,9 +58,11 @@ final class PlaylistSquareCache {
         hasMore: Bool = false,
         nextOffset: Int = 0
     ) {
+        lock.lock()
+        defer { lock.unlock() }
         let entry = Entry(savedAt: Date(), playlists: playlists, hasMore: hasMore, nextOffset: nextOffset)
         guard let data = try? JSONEncoder().encode(entry) else { return }
-        UserDefaults.standard.set(data, forKey: cacheKey(provider: provider, category: category, loggedIn: loggedIn))
+        defaults.set(data, forKey: cacheKey(provider: provider, category: category, loggedIn: loggedIn))
     }
 
     private func cacheKey(provider: SearchProvider, category: PlaylistSquareCategory, loggedIn: Bool) -> String {
@@ -62,4 +70,15 @@ final class PlaylistSquareCache {
         let version = provider == .qishui ? "v8" : "v5"
         return "beans.playlistSquare.cache.\(version).\(provider.rawValue).\(loggedIn ? "login" : "guest").\(safeID)"
     }
+
+    func clearCache() {
+        lock.lock()
+        defer { lock.unlock() }
+        let all = defaults.dictionaryRepresentation()
+        let keys = all.keys.filter { BeansCacheDefaults.isPlaylistSquareKey($0) }
+        for key in keys {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
 }

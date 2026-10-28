@@ -36,6 +36,7 @@ enum UnblockService {
         return URLSession(configuration: config)
     }()
     private static let resolutionCacheLock = NSLock()
+
     private static var resolutionCache: [String: ResolutionCacheEntry] = [:]
     private static let resolutionCacheTTL: TimeInterval = 35
     private static let persistentResolutionCacheKey = "beans.thirdPartyPlaybackURLCache.v1"

@@ -8,10 +8,22 @@ actor BeansLockScreenVideoStore {
     private var pending: [String: Task<URL, Error>] = [:]
     private var retained: [String: Int] = [:]
     private var files: [String: Set<URL>] = [:]
-    private let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        .appendingPathComponent("BeansLockScreenArtwork", isDirectory: true)
+    private var pendingRetains = 0
+    private let directory: URL
+
+    init(directory: URL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("BeansLockScreenArtwork", isDirectory: true)) {
+        self.directory = directory
+    }
+
+    func cacheDiskBytes() throws -> Int64 {
+        try BeansCacheFiles.bytes(in: directory, under: directory.deletingLastPathComponent())
+    }
 
     func retain(source: URL, identifier: String) async throws -> URL {
+        pendingRetains += 1
+        defer { pendingRetains -= 1 }
+        _ = try BeansCacheFiles.validateDirectory(directory, under: directory.deletingLastPathComponent())
         let key = SHA256.hash(data: Data(identifier.utf8)).map { String(format: "%02x", $0) }.joined()
         let target = directory.appendingPathComponent("source-" + key).appendingPathExtension(source.pathExtension.isEmpty ? "jpg" : source.pathExtension)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -35,13 +47,11 @@ actor BeansLockScreenVideoStore {
 
     /// Only generated assets with no artwork lease may be removed.
     func clearUnused() throws {
-        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        // A retain may be suspended downloading a source; leave its files alone as well.
+        guard pending.isEmpty, pendingRetains == 0 else { return }
         let protected = Set(files.filter { (retained[$0.key] ?? 0) > 0 }.flatMap { $0.value })
-        for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) where !protected.contains(url) {
-            // Exports write UUID temporary files while in progress; leave them until the exporter finishes.
-            if !pending.isEmpty { continue }
-            try FileManager.default.removeItem(at: url)
-        }
+        try BeansCacheFiles.clearContents(of: directory, under: directory.deletingLastPathComponent(), retaining: protected)
+
     }
 
     func video(source: URL, identifier: String, size: CGSize) async throws -> URL {

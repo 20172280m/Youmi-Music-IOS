@@ -24,7 +24,7 @@ final class QQMusicAuth: ObservableObject {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForRequest = 12
         config.httpShouldSetCookies = false
         config.httpCookieAcceptPolicy = .never
         session = URLSession(configuration: config, delegate: redirectBlocker, delegateQueue: nil)

@@ -341,6 +341,11 @@ struct DiscoverView: View {
     }
 
     private func openRoute(_ route: DiscoverRoute) {
+        // 歌手页走根视图的全屏呈现，唯一入口。
+        if case .artist(let artist) = route {
+            ArtistPresentation.shared.present(artist)
+            return
+        }
         if #available(iOS 16.0, *) {
             navigationPath.append(route)
         } else {
@@ -1633,7 +1638,7 @@ struct DiscoverView: View {
         }
         switch source {
         case .netease: return "推荐歌单暂时没有内容"
-        case .qq: return "QQ音乐热门歌单暂未加载成功\n请稍后重试"
+        case .qq: return "QQ音乐热门歌单加载失败\n请稍后重试"
         case .kugou: return "歌单广场暂时没有内容"
         case .qishui: return "汽水音乐歌单暂时没有内容"
         case .bilibili: return "哔哩哔哩音乐暂时没有内容"

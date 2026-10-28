@@ -32,7 +32,6 @@ extension BiliAPIClient {
         tryLook: Bool = true
     ) -> [String: String] {
         var query = [
-            "bvid": bvid,
             "cid": String(cid),
             "qn": String(qn),
             "fnval": "4048",
@@ -55,6 +54,7 @@ extension BiliAPIClient {
         if let videoCodecid = codecPreference.videoCodecid(requestedQuality: qn) {
             query["video_codecid"] = videoCodecid
         }
+        query.merge(BiliVideoIdentityQuery.parameters(for: bvid, aidKey: "avid")) { _, identity in identity }
         return query
     }
 
@@ -82,7 +82,6 @@ extension BiliAPIClient {
         tryLook: Bool
     ) -> [String: String] {
         var query = [
-            "bvid": bvid,
             "cid": String(cid),
             "qn": String(qn),
             "fnval": "4048",
@@ -100,6 +99,7 @@ extension BiliAPIClient {
         if tryLook {
             query["try_look"] = "1"
         }
+        query.merge(BiliVideoIdentityQuery.parameters(for: bvid, aidKey: "avid")) { _, identity in identity }
         return query
     }
 
@@ -148,7 +148,8 @@ extension BiliAPIClient {
                     path: "/x/player/playurl",
                     query: query,
                     referer: referer,
-                    userAgent: userAgent(for: streamSource),
+                    // playurl 用手机 Safari 身份：桌面 Chrome 的 UA 配非浏览器的 TLS 指纹会被风控挡成 412。
+                    userAgent: Self.mobileUserAgent,
                     cookieHeader: cookieHeader,
                     cachePolicy: .reloadIgnoringLocalCacheData,
                     priority: priority
@@ -242,7 +243,8 @@ extension BiliAPIClient {
                         path: "/x/player/wbi/playurl",
                         query: signed,
                         referer: referer,
-                        userAgent: userAgent(for: streamSource),
+                        // playurl 用手机 Safari 身份：桌面 Chrome 的 UA 配非浏览器的 TLS 指纹会被风控挡成 412。
+                    userAgent: Self.mobileUserAgent,
                         cookieHeader: cookieHeader,
                         cachePolicy: .reloadIgnoringLocalCacheData,
                         priority: priority

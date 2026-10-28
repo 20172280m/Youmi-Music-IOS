@@ -2,6 +2,7 @@ import Foundation
 
 /// Persists raw lyrics so a song can render immediately when it is played again.
 final class LyricsCache {
+
     static let shared = LyricsCache()
 
     private struct Entry: Codable {
@@ -32,11 +33,17 @@ final class LyricsCache {
     private let prefix = "beans.lyrics.cache.v1."
     private let maxAge: TimeInterval = 14 * 24 * 60 * 60
 
-    private init() {}
+    private let defaults: UserDefaults
+    private let lock = NSLock()
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
 
     func value(for key: String) -> (lyric: String, translation: String?, wordTiming: String?, wordFormat: LyricWordFormat?)? {
         let safeKey = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
-        guard let data = UserDefaults.standard.data(forKey: prefix + safeKey),
+        lock.lock()
+        let data = defaults.data(forKey: prefix + safeKey)
+        lock.unlock()
+        guard let data,
               let entry = try? JSONDecoder().decode(Entry.self, from: data),
               Date().timeIntervalSince(entry.savedAt) < maxAge,
               !entry.lyric.isEmpty else { return nil }
@@ -47,7 +54,17 @@ final class LyricsCache {
         guard !lyric.isEmpty else { return }
         let safeKey = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
         let entry = Entry(lyric: lyric, translation: translation, wordTiming: wordTiming, wordFormat: wordFormat?.rawValue, savedAt: Date())
+        // 歌词可能很长，编码放在锁外做，避免主线程读歌词时排在编码后面。
         guard let data = try? JSONEncoder().encode(entry) else { return }
-        UserDefaults.standard.set(data, forKey: prefix + safeKey)
+        lock.lock()
+        defer { lock.unlock() }
+        defaults.set(data, forKey: prefix + safeKey)
     }
+
+    func clearCache() {
+        lock.lock()
+        defer { lock.unlock() }
+        BeansCacheDefaults.clear(.lyrics, in: defaults)
+    }
+
 }

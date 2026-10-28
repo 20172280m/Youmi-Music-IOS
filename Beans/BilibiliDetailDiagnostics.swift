@@ -33,7 +33,30 @@ enum BilibiliDetailDiagnostics {
     }
 
     static func clear() {
-        queue.async { try? FileManager.default.removeItem(at: fileURL) }
+        Task {
+            do { try await clearCache() }
+            catch { BeansLogger.shared.log("详情日志清理失败：\(error.localizedDescription)", level: .error) }
+        }
+    }
+
+    static func clearCache() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async {
+                do {
+                    try BeansCacheFiles.removeFile(fileURL, under: fileURL.deletingLastPathComponent())
+                    continuation.resume()
+                } catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+
+    static func cacheDiskBytes() async throws -> Int64 {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do { continuation.resume(returning: try BeansCacheFiles.fileBytes(fileURL, under: fileURL.deletingLastPathComponent())) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
     }
 }
 

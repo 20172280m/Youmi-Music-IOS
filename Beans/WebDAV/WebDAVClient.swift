@@ -26,7 +26,12 @@ struct WebDAVClient {
         request.httpBody = Data(xml.utf8)
         let file = try await WebDAVTransfer(root: root, limit: 8 * 1024 * 1024).run(request)
         defer { try? FileManager.default.removeItem(at: file) }
-        return try WebDAVListingParser.parse(Data(contentsOf: file), directory: url, root: root)
+        let payload = try Data(contentsOf: file)
+        // 200 + HTML（例如把普通网站地址当 WebDAV 填）会解析出空目录，看着像"连上了但没文件"。
+        // 只有确实回了 multistatus 才当 WebDAV 处理。
+        let head = String(decoding: payload.prefix(4096), as: UTF8.self).lowercased()
+        guard head.contains("multistatus") else { throw WebDAVError.invalidListing }
+        return try WebDAVListingParser.parse(payload, directory: url, root: root)
     }
 
     func download(_ url: URL, limit: Int64) async throws -> URL {

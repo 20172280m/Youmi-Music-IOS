@@ -17,8 +17,14 @@ actor BilibiliAPI {
     static let shared = BilibiliAPI()
     nonisolated static let headers = [
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-        "Referer": "https://www.bilibili.com/", "Origin": "https://www.bilibili.com"
+        "Referer": "https://www.bilibili.com/", "Origin": "https://www.bilibili.com",
+        // 浏览器必带的两行；缺 Accept-Language 是很典型的机器特征，风控会报 412。
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "zh-CN,zh;q=0.9"
     ]
+    /// 手机浏览器身份：playurl 这类风控最重的接口只认浏览器本身的样子，
+    /// 桌面 Chrome 的 UA 配上非浏览器的 TLS 指纹会被风控直接挡成 HTTP 412。
+    nonisolated static let mobileUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Mobile/15E148 Safari/604.1"
     private let session: URLSession
     private var cookie = ""
     private var restoredSession = false
@@ -29,7 +35,7 @@ actor BilibiliAPI {
     private var cache: [String: (Date, [String: Any])] = [:]
     init() {
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForRequest = 12
         config.timeoutIntervalForResource = 25
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false
@@ -42,7 +48,7 @@ actor BilibiliAPI {
         cache.removeAll()
         wbiKey = ""
     }
-    func raw(_ url: URL, cookieOverride: String? = nil) async throws -> ([String: Any], HTTPURLResponse) {
+    func raw(_ url: URL, cookieOverride: String? = nil, referer: String? = nil, userAgent: String? = nil) async throws -> ([String: Any], HTTPURLResponse) {
         if cookieOverride == nil, !restoredSession {
             let saved = await BilibiliAuth.shared.cookieHeader
             if !restoredSession {
@@ -51,7 +57,13 @@ actor BilibiliAPI {
             }
         }
         var request = URLRequest(url: url)
-        Self.headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        var headers = Self.headers
+        if let userAgent {
+            headers["User-Agent"] = userAgent
+            headers["Origin"] = nil
+        }
+        headers.forEach { request.setValue($0.value, forHTTPHeaderField: $0.key) }
+        if let referer { request.setValue(referer, forHTTPHeaderField: "Referer") }
         let cookies = [cookieOverride ?? cookie, fingerprint].filter { !$0.isEmpty }.joined(separator: "; ")
         if !cookies.isEmpty { request.setValue(cookies, forHTTPHeaderField: "Cookie") }
         let started = Date()
@@ -60,7 +72,8 @@ actor BilibiliAPI {
             let status = (response as? HTTPURLResponse)?.statusCode
             BeansDiagnostics.shared.recordNetwork(url: url, method: request.httpMethod ?? "GET", status: status, duration: Date().timeIntervalSince(started))
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                throw BilibiliError(message: "哔哩哔哩请求失败（HTTP \(status ?? 0)）")
+                // 把路径带上，失败时能一眼看出是哪个接口被挡（临时诊断，定位后删除）。
+                throw BilibiliError(message: "哔哩哔哩请求失败（HTTP \(status ?? 0) · \(url.path)）")
             }
             guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 throw BilibiliError(message: "哔哩哔哩返回了无法识别的数据")
@@ -71,11 +84,11 @@ actor BilibiliAPI {
             throw error
         }
     }
-    func get(_ path: String, _ query: [String: String] = [:], signed: Bool = false, identity: Bool = false, ttl: Double = 0) async throws -> [String: Any] {
+    func get(_ path: String, _ query: [String: String] = [:], signed: Bool = false, identity: Bool = false, ttl: Double = 0, referer: String? = nil, userAgent: String? = nil) async throws -> [String: Any] {
         let key = path + query.keys.sorted().map { $0 + "=" + query[$0]! }.joined(separator: "&")
         if ttl > 0, let entry = cache[key], Date().timeIntervalSince(entry.0) < ttl { return entry.1 }
         if identity && fingerprint.isEmpty {
-            let fp = try await get("/x/frontend/finger/spi")
+            let fp = try await get("/x/frontend/finger/spi", userAgent: userAgent)
             if let b3 = fp["b_3"] as? String, let b4 = fp["b_4"] as? String {
                 fingerprint = "buvid3=\(b3); buvid4=\(b4)"
             }
@@ -99,7 +112,7 @@ actor BilibiliAPI {
         }
         var components = URLComponents(string: "https://api.bilibili.com" + path)!
         components.percentEncodedQuery = values.keys.sorted().map { Self.encode($0) + "=" + Self.encode(values[$0]!) }.joined(separator: "&")
-        let (root, _) = try await raw(components.url!)
+        let (root, _) = try await raw(components.url!, referer: referer, userAgent: userAgent)
         let code = (root["code"] as? NSNumber)?.intValue ?? -1
         let data = root["data"] as? [String: Any] ?? root["result"] as? [String: Any] ?? [:]
         guard code == 0 || (path == "/x/web-interface/nav" && code == -101 && data["wbi_img"] != nil) else {
@@ -143,7 +156,9 @@ actor BilibiliAPI {
     }
     func video(_ id: String) async throws -> [String: Any] {
         guard let videoID = Self.videoID(id) else { throw BilibiliError(message: "B站视频编号无效") }
-        return try await get("/x/web-interface/view", videoID.hasPrefix("BV") ? ["bvid":videoID] : ["aid":String(videoID.dropFirst(2))], ttl: 300)
+        // view 和 playurl 同一套手机浏览器身份：不带访客身份的桌面 Chrome 请求会被风控
+        // 间歇地挡成 HTTP 412，播放队列就会卡在“取视频信息”这一步。
+        return try await get("/x/web-interface/view", videoID.hasPrefix("BV") ? ["bvid":videoID] : ["aid":String(videoID.dropFirst(2))], identity: true, ttl: 300, userAgent: Self.mobileUserAgent)
     }
     func song(_ item: [String: Any], part: [String: Any]? = nil) -> Song? {
         let bvid = Self.text(item["bvid"])
@@ -273,10 +288,15 @@ actor BilibiliAPI {
         let bvid = Self.text(data["bvid"])
         if bvid.isEmpty { query["aid"] = Self.text(data["aid"]) } else { query["bvid"] = bvid }
         var lastError: Error = BilibiliError(message: "该视频没有返回可播放的 AAC 音轨，可能需要登录或已不可用")
+        let referer = "https://www.bilibili.com/video/\(bvid.isEmpty ? "av" + Self.text(data["aid"]) : bvid)"
         for signed in [false, true] {
             try Task.checkCancellation()
             do {
-                let response = try await get(signed ? "/x/player/wbi/playurl" : "/x/player/playurl", query, signed: signed)
+                // 访客身份（buvid3/buvid4）+ 视频页 Referer 都按浏览器的方式带，
+                // 不写死；否则风控会直接把整条请求挡成 HTTP 412。
+                let response = try await get(signed ? "/x/player/wbi/playurl" : "/x/player/playurl", query,
+                                             signed: signed, identity: true, referer: referer,
+                                             userAgent: Self.mobileUserAgent)
                 let urls = BilibiliProtocol.audioURLs(response, preferredID: preferred)
                 if !urls.isEmpty { return urls }
                 let progressive = BilibiliProtocol.progressiveURLs(response)
@@ -290,7 +310,8 @@ actor BilibiliAPI {
             query["fnval"] = "1"
             query["qn"] = "16"
             query["platform"] = "html5"
-            let response = try await get("/x/player/playurl", query)
+            let response = try await get("/x/player/playurl", query, identity: true, referer: referer,
+                                         userAgent: Self.mobileUserAgent)
             let urls = BilibiliProtocol.progressiveURLs(response)
             if !urls.isEmpty { return urls }
         } catch is CancellationError { throw CancellationError() }
@@ -409,7 +430,7 @@ actor BilibiliAPI {
     private func crossDomainCookies(from url: URL) async throws -> [String: String] {
         guard url.path.lowercased().contains("crossdomain") else { return [:] }
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForRequest = 12
         config.timeoutIntervalForResource = 25
         config.httpCookieStorage = nil
         config.httpShouldSetCookies = false

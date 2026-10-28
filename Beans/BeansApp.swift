@@ -22,6 +22,7 @@ struct BeansApp: App {
             UserDefaults.standard.set(SearchProvider.bilibili.rawValue, forKey: "beans.homeSource")
         }
         #endif
+        // 主线程健康探针：与任何页面无关，用来判断“卡住”是从哪一刻开始的
         // 闪退检测：优先初始化，检测上次异常退出并安装崩溃捕获
         _ = CrashReporter.shared
         CrashMetricCollector.shared.start()
@@ -50,6 +51,8 @@ struct BeansApp: App {
         // fallback background and then switch to the restored wallpaper,
         // which was visible as a brief flash on every launch.
         ThemeStore.shared.restoreWallpapersIfNeeded()
+        // 收到内存警告时先丢解码后的封面位图，别等系统来杀。
+        BeansCoverImageStore.startObservingMemoryWarnings()
     }
 
     var body: some Scene {
@@ -82,6 +85,7 @@ struct BeansApp: App {
             }
             .onAppear {
                 BeansCarPlayCoordinator.shared.configure(player: player)
+                LyricDebugOverlayWindow.shared.configure(player: player)
                 BilibiliCiliCiliBridge.shared.configure(player: player)
                 BilibiliAppearanceBridge.shared.start()
             }

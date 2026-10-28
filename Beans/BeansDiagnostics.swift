@@ -7,6 +7,7 @@ import CryptoKit
 /// iOS 不能在进程被系统直接终止时可靠地拦截所有 Swift trap，因此原生崩溃仍由
 /// CrashReporter 与 MetricKit 负责，这里保存崩溃前的上下文，方便下次启动定位。
 final class BeansDiagnostics: ObservableObject {
+
     static let shared = BeansDiagnostics()
 
     @Published private(set) var breadcrumbCount = 0
@@ -95,10 +96,15 @@ final class BeansDiagnostics: ObservableObject {
 
     func clear() {
         BeansLogger.shared.clear()
+        clearCachedState()
+    }
+
+    func clearCachedState() {
         lock.lock()
         breadcrumbs.removeAll()
-        lock.unlock()
+        UserDefaults.standard.removeObject(forKey: "beans.diagnostics.breadcrumbs")
         UserDefaults.standard.removeObject(forKey: "beans.crash.recentEvents")
+        lock.unlock()
         lastCrashFile = nil
         breadcrumbCount = 0
     }
@@ -111,8 +117,8 @@ final class BeansDiagnostics: ObservableObject {
         breadcrumbs.append(lineText)
         if breadcrumbs.count > maxBreadcrumbs { breadcrumbs.removeFirst(breadcrumbs.count - maxBreadcrumbs) }
         let recent = breadcrumbs
-        lock.unlock()
         UserDefaults.standard.set(recent, forKey: "beans.diagnostics.breadcrumbs")
+        lock.unlock()
         breadcrumbCount = recent.count
         BeansLogger.shared.log(lineText, level: level)
     }
@@ -150,11 +156,32 @@ final class BeansDiagnostics: ObservableObject {
         value.replacingOccurrences(of: "(Authorization|Cookie|Set-Cookie|access_token|refresh_token|password|sign)[=:][^; ,&]+", with: "$1=[REDACTED]", options: .regularExpression)
     }
 
-    private var logDirectory: URL {
-        let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("BeansLogs", isDirectory: true)
+    /// 与原版一致的落盘位置：Application Support/BeansDiagnostics。
+    /// 旧版本写在 Documents/BeansLogs，首次访问时把已有文件搬过来，不丢历史日志。
+    static var logDirectoryURL: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let url = base.appendingPathComponent("BeansDiagnostics", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        migrateLegacyLogsIfNeeded(to: url)
         return url
     }
+
+    private static var didMigrateLegacyLogs = false
+    private static func migrateLegacyLogsIfNeeded(to destination: URL) {
+        guard !didMigrateLegacyLogs else { return }
+        didMigrateLegacyLogs = true
+        let legacy = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("BeansLogs", isDirectory: true)
+        guard let items = try? FileManager.default.contentsOfDirectory(at: legacy, includingPropertiesForKeys: nil), !items.isEmpty else { return }
+        for item in items {
+            let target = destination.appendingPathComponent(item.lastPathComponent)
+            if !FileManager.default.fileExists(atPath: target.path) {
+                try? FileManager.default.moveItem(at: item, to: target)
+            }
+        }
+    }
+
+    private var logDirectory: URL { Self.logDirectoryURL }
 
     private static func crashFiles(in directory: URL) -> [URL] {
         (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]))?
@@ -167,8 +194,7 @@ final class BeansDiagnostics: ObservableObject {
     }
 
     private static func latestCrashFile() -> URL? {
-        let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("BeansLogs", isDirectory: true)
-        return crashFiles(in: directory).first
+        crashFiles(in: logDirectoryURL).first
     }
 }
 
@@ -191,6 +217,7 @@ struct BeansDiagnosticsSettingsView: View {
                         Text("记录页面进入、点击、网络摘要、卡顿前上下文和系统诊断。账号、Cookie、密码与令牌会自动脱敏。")
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
+                        diagnosticRow("构建", value: BeansBuildStamp.text)
                         diagnosticRow("最近操作", value: "\(diagnostics.breadcrumbCount) 条")
                         diagnosticRow("当前页面", value: diagnostics.lastRoute)
                         diagnosticRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
@@ -202,6 +229,17 @@ struct BeansDiagnosticsSettingsView: View {
                             Label("清空本地诊断日志", systemImage: "trash")
                                 .font(BeansFont.appFont(13, .medium))
                         }
+                    }
+                    .padding(16)
+                    .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("悬浮歌词调试", systemImage: "waveform.path.ecg")
+                            .font(BeansFont.appFont(17, .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                        LyricDebugSettingsControl()
+                        Text("开启后在屏幕上显示可拖动的调试按钮，点开可看音频实际时间、歌词有效时间、逐字数据与当前歌词界面状态，并导出检测日志。只读歌词时间轴，不会请求歌词或改变播放。")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
                     }
                     .padding(16)
                     .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }

@@ -26,7 +26,7 @@ final class NetEaseAPI {
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .never
         config.httpShouldSetCookies = false
-        config.timeoutIntervalForRequest = 20
+        config.timeoutIntervalForRequest = 12
         session = URLSession(configuration: config)
 
         nuid = Self.randomHex(length: 32)      // 64 位 hex

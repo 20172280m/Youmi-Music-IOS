@@ -149,6 +149,16 @@ struct BeansTabVisibility: Equatable {
 }
 
 struct RootView: View {
+    /// 打出当前安装包的版本号、构建号和可执行文件时间，验证前先核对是不是刚构建的产物。
+    static func logBuildStamp() {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        let exe = Bundle.main.executableURL
+        let date = (try? exe?.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? nil
+        let stamp = date.map { ISO8601DateFormatter().string(from: $0) } ?? "?"
+    }
+
     @EnvironmentObject private var theme: ThemeStore
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var player: PlayerManager
@@ -160,6 +170,7 @@ struct RootView: View {
     @ObservedObject private var qqAuth = QQMusicAuth.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var bilibiliPresentation = BilibiliPresentationState.shared
+    @ObservedObject private var artistPresentation = ArtistPresentation.shared
     @AppStorage("beans.themeMode") private var themeModeRaw = BeansThemeMode.system.rawValue
 
     @State private var selection: RootTab = .discover
@@ -291,6 +302,7 @@ struct RootView: View {
         return false
     }
 
+
     var body: some View {
         let _ = theme.accent
         GeometryReader { proxy in
@@ -355,20 +367,32 @@ struct RootView: View {
         .confirmationDialog("主页平台", isPresented: $showHomePlatformMenu, titleVisibility: .visible) {
             platformSelectionMenu
         }
+        // 全屏歌手页：在根视图上铺一层，压住标签栏和主页头部，不用系统弹层。
+        // 系统弹层（sheet / fullScreenCover）打开这一页会让主线程卡死，推进去则正常；
+        // 铺一层等于把“推进去”那个能跑的环境原样搬上来。
+        // 播放器弹层开着的时候不铺这一层：弹层里已经铺了一份（见下），
+        // 两处同时铺会让同一个歌手页活两份，各自加载、各自建一套封面加载器，
+        // 主线程在几秒内被拖到不响应（心跳打 BLOCKED、读树只剩系统节点）。
+        .overlay { artistHomeLayer }
         .fullScreenCover(isPresented: $showPlayer) {
-            if #available(iOS 18.0, *) {
-                playerPresentation
-                    .navigationTransition(
-                        .zoom(
-                            sourceID: BeansNowPlayingTransitionID.surface,
-                            in: nowPlayingTransition
+            Group {
+                if #available(iOS 18.0, *) {
+                    playerPresentation
+                        .navigationTransition(
+                            .zoom(
+                                sourceID: BeansNowPlayingTransitionID.surface,
+                                in: nowPlayingTransition
+                            )
                         )
-                    )
-            } else if #available(iOS 16.4, *) {
-                playerPresentation
-            } else {
-                playerPresentation
+                } else if #available(iOS 16.4, *) {
+                    playerPresentation
+                } else {
+                    playerPresentation
+                }
             }
+            // 播放器里点歌手名不再在弹层里铺一份：同一个歌手页同时铺两份会拖死主线程
+            // （日志实证：两份页面、两套加载、封面加载器翻倍，主线程打 BLOCKED）。
+            // 播放页点歌手名时先把播放页收起来，由根视图那一层统一铺出来。
         }
         .animation(
             rootLayoutSettled ? .spring(response: 0.4, dampingFraction: 0.86) : nil,
@@ -382,6 +406,8 @@ struct RootView: View {
             ToastView(center: ToastCenter.shared)
         }
         .onAppear {
+            // 验证规矩：每次启动第一行先打版本号，和刚构建的产物对上再开始测。
+            Self.logBuildStamp()
             // 启动已完成：标记本次启动正常（供下次启动检测闪退）
             CrashReporter.shared.markLaunchCompleted()
             if disclaimerAccepted, ChangelogStore.shouldShowWhatsNew {
@@ -650,7 +676,30 @@ struct RootView: View {
         }
     }
 
+    /// 全屏歌手页的唯一呈现：根视图和播放器弹层共用同一份。
     @ViewBuilder
+    private var artistHomeLayer: some View {
+        if let artist = artistPresentation.artist {
+            ArtistHomeSheet(artist: artist, embeddedInNavigation: false,
+                            onClose: { ArtistPresentation.shared.close() })
+                .environmentObject(player)
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .ignoresSafeArea()
+                .zIndex(60)
+        } else if let request = artistPresentation.nameRequest {
+            ArtistHomeSheet(artistName: request.name, artistSource: request.source,
+                            embeddedInNavigation: false,
+                            onClose: { ArtistPresentation.shared.close() })
+                .environmentObject(player)
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .ignoresSafeArea()
+                .zIndex(60)
+                .id(request.id)
+        }
+    }
+
     private var playerPresentation: some View {
         BeansNowPlayingPresentation(
             isPresented: $showPlayer,
@@ -1367,6 +1416,7 @@ struct BeansNowPlayingPresentation<Content: View>: View {
     let content: Content
     @ObservedObject private var appleLayout = AppleMusicLayoutStore.shared
     @State private var dragOffset: CGFloat = 0
+    @State private var didLogDismissalPath = false
 
     init(
         isPresented: Binding<Bool>,
@@ -1392,16 +1442,23 @@ struct BeansNowPlayingPresentation<Content: View>: View {
             .offset(y: usesSystemInteractiveDismissal ? 0 : dragOffset)
             .contentShape(Rectangle())
 
-            // iOS 26 uses the system's interactive transition; older systems
-            // keep the compatible local drag gesture.
-            if usesSystemInteractiveDismissal {
-                playerSurface
-            } else {
-                playerSurface
-                    .simultaneousGesture(dismissGesture)
+            // 实测（iOS 27 模拟器）：系统缩放转场不会替全屏覆盖兜住下拉，
+            // 默认的无顶栏播放页又没有关闭按钮，结果一条出口都没有。
+            // 所以自家下拉手势在所有系统上都挂；仍只认顶部区域起手，避免和歌词滚动打架。
+            playerSurface
+                .simultaneousGesture(dismissGesture)
+        }
+        .onAppear {
+            dragOffset = 0
+            // 验收需要一个可对时间点的标志：这一版下拉关闭到底挂没挂上、挂在哪。
+            if !didLogDismissalPath {
+                didLogDismissalPath = true
+                BeansLogger.shared.log(
+                    "PLAYER 下拉关闭：本地手势全系统挂载，顶部 \(Int(BeansNowPlayingPresentationMetrics.verticalStartZone)) 点内起手；系统交互关闭=\(usesSystemInteractiveDismissal ? "开" : "关")；顶部无障碍手柄已隐藏",
+                    level: .info
+                )
             }
         }
-        .onAppear { dragOffset = 0 }
         .background {
             if !usesSystemInteractiveDismissal {
                 BeansPresentedSurfaceClearer()
@@ -1431,7 +1488,9 @@ struct BeansNowPlayingPresentation<Content: View>: View {
         )
         .modifier(AppleMusicLayoutTransform(entry: appleLayout.entry(for: .top)))
         .contentShape(Rectangle())
-        .accessibilityLabel("下拉关闭播放页")
+        // 这一层只是下拉手势的视觉锚点，本身不接收点击；不要给它挂无障碍标签，
+        // 否则读屏用户会找到一个按了没反应的“下拉关闭播放页”。
+        .accessibilityHidden(true)
 
         surface
             .padding(.top, safeAreaTop)

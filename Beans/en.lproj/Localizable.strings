@@ -1055,3 +1055,36 @@
 "心动模式暂时不可用" = "Heartbeat Mode is unavailable right now";
 "已开启心动模式" = "Heartbeat Mode started";
 "心动模式加载失败" = "Failed to load Heartbeat Mode";
+
+/* Cache management — functional reconstruction. */
+"缓存管理" = "Cache Management";
+"已展开" = "Expanded";
+"已收起" = "Collapsed";
+"刷新统计" = "Refresh Usage";
+"清除全部缓存" = "Clear All Caches";
+"正在处理缓存…" = "Working on caches…";
+"暂无缓存统计，请刷新重试。" = "No cache usage available. Refresh to try again.";
+"暂无统计" = "Not measured";
+"磁盘：%@" = "Disk: %@";
+"内存估算：%@" = "Estimated memory: %@";
+"内存：未知" = "Memory: unknown";
+"清除「%@」？" = "Clear “%@”?";
+"确认清除" = "Confirm Clear";
+"清除%@缓存" = "Clear %@ cache";
+"内存仅为可统计部分的估算；未知不代表为零，不含全部图片与播放对象。" = "Memory is a partial estimate. Unknown does not mean zero; not all image and playback objects are included.";
+"沉浸媒体可能保留正在使用的资源；哔哩哔哩视频或直播使用中会跳过清理，统计不一定归零。" = "In-use immersive media may be retained. Bilibili cleanup is skipped while a video or live room is active; usage may not reach zero.";
+"缓存会在使用时重新加载；保留登录信息、设置、壁纸、自定义封面、下载文件、本地音乐及字体。\n沉浸媒体可能保留正在使用的资源；哔哩哔哩视频或直播使用中会跳过清理，统计不一定归零。" = "Cached data reloads as needed. Sign-in details, settings, wallpapers, custom artwork, downloaded files, local music, and fonts are retained.\nIn-use immersive media may be retained. Bilibili cleanup is skipped while a video or live room is active; usage may not reach zero.";
+"数据载荷估算：%@" = "Estimated data payload: %@";
+"元数据与歌词显示编码数据载荷估算，不是共享偏好文件的磁盘占用。" = "Metadata and lyrics show estimated encoded payload sizes, not the disk usage of the shared preferences file.";
+"封面与图片" = "Covers and Images";
+"锁屏沉浸素材" = "Immersive Lock Screen Media";
+"首页与详情数据" = "Home and Detail Data";
+"网络响应" = "Network Responses";
+"视频与弹幕资源" = "Video and Danmaku Resources";
+"诊断日志" = "Diagnostic Logs";
+"图片缓存" = "Image Cache";
+"沉浸媒体缓存" = "Immersive Media Cache";
+"页面数据缓存" = "Page Data Cache";
+"歌词缓存" = "Lyrics Cache";
+"网络缓存" = "Network Cache";
+"哔哩哔哩缓存" = "Bilibili Cache";

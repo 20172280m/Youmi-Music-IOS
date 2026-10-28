@@ -598,6 +598,19 @@ private struct VideoDetailInteractivePlayerLayer: View {
                     .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
                     .zIndex(3)
                 }
+            } else {
+                // 没有播放器画面（加载中或播放地址失败）：外壳不画任何控件，
+                // 这里补一个看得见的出口，免得只能靠左缘右滑。
+                VideoDetailFallbackBackButton(action: onNavigateBack)
+                    .padding(.leading, 12)
+                    .padding(.top, safeAreaTop + 8)
+                    .frame(
+                        width: layout.playerFrame.width,
+                        height: layout.playerFrame.height,
+                        alignment: .topLeading
+                    )
+                    .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
+                    .zIndex(4)
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)

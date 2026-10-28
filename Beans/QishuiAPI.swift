@@ -197,7 +197,7 @@ final class QishuiAPI: ObservableObject {
 
     private init() {
         let configuration = URLSessionConfiguration.default
-        configuration.timeoutIntervalForRequest = 20
+        configuration.timeoutIntervalForRequest = 12
         configuration.timeoutIntervalForResource = 30
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         session = URLSession(configuration: configuration)

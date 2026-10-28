@@ -3,7 +3,7 @@ import UIKit
 import MetricKit
 
 /// 闪退检测与崩溃日志：捕获未捕获异常 / 崩溃信号，并在下次启动时检测上次是否异常退出。
-/// 崩溃信息写入 Documents/BeansLogs/crash-日期.log，同时写入 App 内日志，便于反馈排查。
+/// 崩溃信息写入 Application Support/BeansDiagnostics/crash-日期.log，同时写入 App 内日志，便于反馈排查。
 final class CrashReporter {
     static let shared = CrashReporter()
 
@@ -95,8 +95,7 @@ final class CrashReporter {
 
     /// 崩溃 / 异常内容写入崩溃日志文件（尽量简单，避免依赖过多）
     static func writeCrash(_ text: String) {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("BeansLogs", isDirectory: true)
+        let dir = BeansDiagnostics.logDirectoryURL
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let formatter = DateFormatter()
@@ -125,8 +124,7 @@ final class CrashReporter {
 
     /// 保存系统在下次启动交付的诊断数据，供定位未捕获的原生崩溃使用。
     static func writeMetricDiagnostic(_ data: Data) {
-        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("BeansLogs", isDirectory: true)
+        let dir = BeansDiagnostics.logDirectoryURL
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let formatter = DateFormatter()

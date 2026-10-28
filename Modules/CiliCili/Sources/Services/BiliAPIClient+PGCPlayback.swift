@@ -95,7 +95,8 @@ extension BiliAPIClient {
                     path: "/pgc/player/web/v2/playurl",
                     query: query,
                     referer: referer,
-                    userAgent: userAgent(for: streamSource),
+                    // playurl 用手机 Safari 身份：桌面 Chrome 的 UA 配非浏览器的 TLS 指纹会被风控挡成 412。
+                    userAgent: Self.mobileUserAgent,
                     cookieHeader: context.cookieHeader,
                     cachePolicy: .reloadIgnoringLocalCacheData,
                     priority: URLSessionTask.highPriority

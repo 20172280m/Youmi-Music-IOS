@@ -898,11 +898,13 @@ final class PlayerManager: NSObject, ObservableObject {
                     try Task.checkCancellation()
                     guard generation == self.loadGeneration else { return }
                     self.webDAVAudioLease = lease
+                    BeansLogger.shared.log("WebDAV 音频就绪：\(track.relativePath)（autoplay \(autoplay)，续播 \(Int(initialProgress))s）", level: .info)
                     self.setupPlayer(url: lease.url, resumeAt: initialProgress, autoplay: autoplay)
                 } catch is CancellationError {
                     return
                 } catch {
                     guard !Task.isCancelled, generation == self.loadGeneration else { return }
+                    BeansLogger.shared.log("WebDAV 音频加载失败：\(error.localizedDescription)", level: .error)
                     self.isBuffering = false
                     self.loadFailed = true
                     self.finishUnrecoverablePlaybackFailure(song: song, reason: error.localizedDescription)

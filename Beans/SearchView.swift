@@ -291,7 +291,6 @@ struct SearchView: View {
     @State private var searching = false
     @State private var errorMessage: String?
     @State private var showAddToPlaylist: Song?
-    @State private var selectedArtist: Artist?
     @State private var selectedBilibiliArtist: Artist?
     @State private var selectedAlbum: Album?
     @State private var selectedPlaylist: Playlist?
@@ -411,9 +410,6 @@ struct SearchView: View {
         .sheet(item: $showAddToPlaylist) { song in
             AddToLocalPlaylistSheet(song: song)
                 .environmentObject(theme)
-        }
-        .sheet(item: $selectedArtist) { artist in
-            ArtistHomeSheet(artist: artist).environmentObject(player)
         }
         .fullScreenCover(item: $selectedBilibiliArtist) { artist in
             BilibiliNativeStandaloneStack(initialRoute: .up(artist))
@@ -1641,7 +1637,8 @@ struct SearchView: View {
         if artist.source == .bilibili {
             selectedBilibiliArtist = artist
         } else {
-            selectedArtist = artist
+            // 全屏歌手页从根视图呈现，页面内部不自己弹。
+            ArtistPresentation.shared.present(artist)
         }
     }
 
@@ -2056,7 +2053,8 @@ struct AlbumDetailView: View {
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showArtistHome) {
-            ArtistHomeSheet(artistName: album.artistName, artistSource: album.source)
+            ArtistHomeSheet(artistName: album.artistName, artistSource: album.source,
+                            onClose: { showArtistHome = false })
                 .environmentObject(player)
                 .environmentObject(theme)
         }
@@ -2067,7 +2065,10 @@ struct AlbumDetailView: View {
         ZStack {
             GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
             if isLoading {
-                albumDetailLoadingState
+                ZStack(alignment: .bottom) {
+                    albumDetailLoadingState
+                    BeansSlowLoadHint().padding(.bottom, 24)
+                }
             } else if let errorMessage {
                 ErrorStateView(message: errorMessage) { Task { await load() } }
             } else {
@@ -2113,6 +2114,7 @@ struct AlbumDetailView: View {
             if immersiveDetail {
                 BeansImmersiveDetailHeader(coverURL: album.coverURL, title: album.name, subtitle: album.artistName,
                                           metadata: "\(beansSongCountText(tracks.count)) · \(album.releaseCaption)",
+                                          descriptionText: album.albumDescription,
                                           onSubtitle: { showArtistHome = true })
             } else {
             HStack(alignment: .top, spacing: 14) {
@@ -2262,6 +2264,15 @@ struct AlbumDetailView: View {
     }
 
     private func load() async {
+        // 看门狗：接口卡住时必须在可接受时间内退出骨架屏，给出提示与重试。
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            guard !Task.isCancelled, isLoading, tracks.isEmpty else { return }
+            BeansLogger.shared.log("专辑页面加载超时 album=\(album.name)", level: .error)
+            errorMessage = "加载超时"
+            isLoading = false
+        }
+        defer { watchdog.cancel() }
         let cache = DetailSongsCache.shared
         let cacheKey = "album-\(album.source.rawValue)-\(album.id)"
         let relatedCache = RelatedAlbumsCache.shared
@@ -2613,7 +2624,7 @@ struct NativeSearchBar: UIViewRepresentable {
     func makeUIView(context: Context) -> UISearchBar {
         let bar = UISearchBar()
         bar.searchBarStyle = .minimal
-        bar.placeholder = NSLocalizedString(placeholder, comment: "")
+        bar.placeholder = placeholder
         bar.autocorrectionType = .no
         bar.autocapitalizationType = .none
         bar.spellCheckingType = .no
@@ -2630,7 +2641,7 @@ struct NativeSearchBar: UIViewRepresentable {
         if uiView.searchTextField.markedTextRange == nil, uiView.text != text {
             uiView.text = text
         }
-        uiView.placeholder = NSLocalizedString(placeholder, comment: "")
+        uiView.placeholder = placeholder
         uiView.searchTextField.font = BeansFont.appUIFont(15)
         controller?.searchBar = uiView
     }
@@ -2674,7 +2685,7 @@ struct SearchTextField: UIViewRepresentable {
 
     func makeUIView(context: Context) -> UITextField {
         let field = UITextField()
-        field.placeholder = NSLocalizedString(placeholder, comment: "")
+        field.placeholder = placeholder
         field.font = BeansFont.appUIFont(15)
         field.textColor = textColor
         field.autocorrectionType = .no
@@ -2698,7 +2709,7 @@ struct SearchTextField: UIViewRepresentable {
             uiView.text = text
         }
         controller.textField = uiView
-        uiView.placeholder = NSLocalizedString(placeholder, comment: "")
+        uiView.placeholder = placeholder
         uiView.font = BeansFont.appUIFont(15)
         uiView.textColor = textColor
         uiView.setContentHuggingPriority(.defaultLow, for: .horizontal)

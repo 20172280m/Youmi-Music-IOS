@@ -1008,7 +1008,7 @@ struct CoverImage: View {
         // loader. This avoids a skeleton/white frame when a cached detail page
         // is reopened or scrolled back into view.
         let cachedImage = imageLoader.image(for: resolvedURL)
-            ?? BeansCoverImageStore.memoryImage(for: resolvedURL)
+            ?? BeansCoverImageStore.memoryImage(for: resolvedURL, maxPixel: pixelBucket)
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(Color.beansGlassFill)
             .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -1033,8 +1033,9 @@ struct CoverImage: View {
                         // cached/network image is decoded. The animated white
                         // shimmer was the source of the one-frame flash seen
                         // across detail pages and the Discover screen.
+                        // 加载中给一层实底灰：白格子看起来像坏了，灰格子看起来像在装。
                         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                            .fill(Color.beansGlassFill.opacity(0.72))
+                            .fill(Color.beansCoverPlaceholder)
                     }
                 }
                 .frame(width: size * max(aspectRatio, 0.1), height: size)
@@ -1045,20 +1046,25 @@ struct CoverImage: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .onAppear {
-                if !usesCustomMediaRenderer { imageLoader.load(url: resolvedURL) }
+                if !usesCustomMediaRenderer { imageLoader.load(url: resolvedURL, maxPixel: pixelBucket) }
             }
             .onChange(of: url) { nextURL in
                 let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: nextURL)
                 if !customCovers.isStoredCover(resolvedURL) {
-                    imageLoader.load(url: resolvedURL)
+                    imageLoader.load(url: resolvedURL, maxPixel: pixelBucket)
                 }
             }
             .onChange(of: song?.identityKey) { _ in
                 let resolvedURL = customCovers.url(for: song) ?? customCovers.resolvedURL(for: url)
                 if !customCovers.isStoredCover(resolvedURL) {
-                    imageLoader.load(url: resolvedURL)
+                    imageLoader.load(url: resolvedURL, maxPixel: pixelBucket)
                 }
             }
+    }
+
+    /// 这一格实际画多大，就只解多大：130 点的小图不再按两千像素原图解。
+    private var pixelBucket: Int {
+        BeansCoverImageStore.pixelBucket(forPointSize: max(size, size * max(aspectRatio, 0.1)))
     }
 
     private var placeholderIcon: some View {
@@ -1087,15 +1093,73 @@ struct CoverImage: View {
 /// 封面图片共享缓存：内存缓存负责当前页面快速显示，URLCache 负责跨页面和重启后的磁盘缓存。
 /// 预加载器与 CoverImage 使用同一个 URLSession，避免启动时预加载的图片无法被页面复用。
 final class BeansCoverImageStore {
-    static let memoryCache = NSCache<NSURL, UIImage>()
+    /// 内存缓存：按显示尺寸分桶存，按字节计费，上限 64 MB。
+    /// 页面上同时有几十上百张封面，原图全尺寸留着能把进程顶到七八百兆。
+    static let memoryCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 64 * 1024 * 1024
+        cache.countLimit = 300
+        return cache
+    }()
+
+    /// 显示尺寸档位（像素）：行缩略图 40 点、专辑卡 150 点、头像 132 点、大图 200 点以上各有一档。
+    private static let pixelTiers: [Int] = [120, 180, 256, 360, 480, 640, 900]
+
+    /// 按屏幕点数换算到最近的像素档位，同一张图在不同位置不会互相顶掉缓存。
+    static func pixelBucket(forPointSize points: CGFloat) -> Int {
+        let pixels = points * UIScreen.main.scale
+        return pixelTiers.first { CGFloat($0) >= pixels } ?? pixelTiers[pixelTiers.count - 1]
+    }
+
+    private static func cacheKey(_ url: URL, _ bucket: Int) -> NSString {
+        "\(url.absoluteString)#\(bucket)" as NSString
+    }
+
+    /// 按显示尺寸解码：原图动辄一千五到两千像素，全尺寸解码一张接近 10 MB。
+    static func decodeCover(_ data: Data, maxPixel: Int) -> UIImage? {
+        guard !data.isEmpty else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else {
+            return UIImage(data: data)
+        }
+        let options = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options) else {
+            return UIImage(data: data)
+        }
+        return UIImage(cgImage: cgImage)
+    }
+
+    /// 写内存缓存时按像素字节数计费，超上限才有东西可淘汰。
+    static func remember(_ image: UIImage, for url: URL, maxPixel: Int) {
+        let cost: Int
+        if let cgImage = image.cgImage {
+            cost = cgImage.width * cgImage.height * 4
+        } else {
+            cost = Int(image.size.width * image.size.height * image.scale * image.scale * 4)
+        }
+        memoryCache.setObject(image, forKey: cacheKey(url, maxPixel), cost: cost)
+    }
     private static let diskCacheLimit = 300 * 1024 * 1024
     private static let diskQueue = DispatchQueue(label: "com.beans.music.cover-image-cache", qos: .utility)
     private static let diskCacheDirectory: URL = {
         let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
         let directory = root.appendingPathComponent("BeansCoverImageFiles", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }()
+    private static let generationLock = NSLock()
+
+    private static var generation: UInt64 = 0
+
+    static var cacheGeneration: UInt64 {
+        generationLock.lock()
+        defer { generationLock.unlock() }
+        return generation
+    }
+
     static let session: URLSession = {
         let configuration = URLSessionConfiguration.default
         configuration.requestCachePolicy = .returnCacheDataElseLoad
@@ -1110,66 +1174,73 @@ final class BeansCoverImageStore {
     /// Read decoded memory or disk-backed URLCache data synchronously.
     /// CoverImage uses this during its first body evaluation to avoid a
     /// skeleton flash when the cover was already cached.
-    static func cachedImage(for url: URL?) -> UIImage? {
+    static func cachedImage(for url: URL?, maxPixel: Int = 480) -> UIImage? {
         guard let url else { return nil }
         if url.isFileURL {
             return CustomCoverMedia.previewImage(at: url)
         }
-        if let image = memoryCache.object(forKey: url as NSURL) {
+        if let image = memoryCache.object(forKey: cacheKey(url, maxPixel)) {
             return image
         }
         let fileURL = diskFileURL(for: url)
-        if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
-           let image = UIImage(data: data) {
-            memoryCache.setObject(image, forKey: url as NSURL)
+        if (try? BeansCacheFiles.isRegularFile(fileURL, under: diskCacheDirectory.deletingLastPathComponent())) == true,
+           let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+           let image = decodeCover(data, maxPixel: maxPixel) {
+            remember(image, for: url, maxPixel: maxPixel)
             try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
             return image
         }
         var request = URLRequest(url: url)
         request.cachePolicy = .returnCacheDataElseLoad
         guard let response = session.configuration.urlCache?.cachedResponse(for: request),
-              let image = UIImage(data: response.data) else { return nil }
+              let image = decodeCover(response.data, maxPixel: maxPixel) else { return nil }
         persist(data: response.data, for: url)
-        memoryCache.setObject(image, forKey: url as NSURL)
+        remember(image, for: url, maxPixel: maxPixel)
         return image
     }
 
     /// Return only the decoded in-memory image. This is intentionally cheap
     /// enough to use during SwiftUI body evaluation; disk rehydration remains
     /// asynchronous in `loadCachedImage`.
-    static func memoryImage(for url: URL?) -> UIImage? {
+    static func memoryImage(for url: URL?, maxPixel: Int = 480) -> UIImage? {
         guard let url, !url.isFileURL else { return nil }
-        return memoryCache.object(forKey: url as NSURL)
+        return memoryCache.object(forKey: cacheKey(url, maxPixel))
     }
 
     /// Rehydrate persisted covers away from SwiftUI's rendering path. The
     /// completion always returns on the main queue so callers can update view state.
-    static func loadCachedImage(for url: URL, completion: @escaping (UIImage?) -> Void) {
+    static func loadCachedImage(for url: URL, maxPixel: Int = 480, completion: @escaping (UIImage?) -> Void) {
         if url.isFileURL {
             DispatchQueue.main.async {
                 completion(CustomCoverMedia.previewImage(at: url))
             }
             return
         }
-        if let image = memoryCache.object(forKey: url as NSURL) {
+        if let image = memoryCache.object(forKey: cacheKey(url, maxPixel)) {
             DispatchQueue.main.async { completion(image) }
             return
         }
 
         let fileURL = diskFileURL(for: url)
+        let token = cacheGeneration
         diskQueue.async {
+            guard token == cacheGeneration else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
             let image: UIImage?
-            if let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
-               let cachedImage = UIImage(data: data) {
-                memoryCache.setObject(cachedImage, forKey: url as NSURL)
+            if (try? BeansCacheFiles.isRegularFile(fileURL, under: diskCacheDirectory.deletingLastPathComponent())) == true,
+           let data = try? Data(contentsOf: fileURL, options: .mappedIfSafe),
+               let cachedImage = decodeCover(data, maxPixel: maxPixel) {
+                remember(cachedImage, for: url, maxPixel: maxPixel)
                 try? FileManager.default.setAttributes([.modificationDate: Date()], ofItemAtPath: fileURL.path)
                 image = cachedImage
             } else {
                 var request = URLRequest(url: url)
                 request.cachePolicy = .returnCacheDataElseLoad
                 if let response = session.configuration.urlCache?.cachedResponse(for: request),
-                   let cachedImage = UIImage(data: response.data) {
-                    memoryCache.setObject(cachedImage, forKey: url as NSURL)
+                   let cachedImage = decodeCover(response.data, maxPixel: maxPixel) {
+                    remember(cachedImage, for: url, maxPixel: maxPixel)
                     persist(data: response.data, for: url)
                     image = cachedImage
                 } else {
@@ -1181,18 +1252,31 @@ final class BeansCoverImageStore {
     }
 
     static func clearCache(completion: @escaping (Bool) -> Void) {
+        generationLock.lock()
+        generation &+= 1
         memoryCache.removeAllObjects()
-        session.configuration.urlCache?.removeAllCachedResponses()
+        generationLock.unlock()
         let directory = diskCacheDirectory
         diskQueue.async {
+            session.configuration.urlCache?.removeAllCachedResponses()
             do {
-                if FileManager.default.fileExists(atPath: directory.path) {
-                    try FileManager.default.removeItem(at: directory)
-                }
-                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                try BeansCacheFiles.clearContents(of: directory, under: directory.deletingLastPathComponent())
                 DispatchQueue.main.async { completion(true) }
             } catch {
                 DispatchQueue.main.async { completion(false) }
+            }
+        }
+    }
+
+    /// Includes this store's URLCache exactly once; decoded NSCache bytes are unknown.
+    static func cacheUsage() async throws -> (disk: Int64, memory: Int64?) {
+        try await withCheckedThrowingContinuation { continuation in
+            diskQueue.async {
+                do {
+                    let files = try BeansCacheFiles.bytes(in: diskCacheDirectory, under: diskCacheDirectory.deletingLastPathComponent())
+                    let responses = Int64(session.configuration.urlCache?.currentDiskUsage ?? 0)
+                    continuation.resume(returning: (files + responses, nil))
+                } catch { continuation.resume(throwing: error) }
             }
         }
     }
@@ -1218,30 +1302,83 @@ final class BeansCoverImageStore {
     }
 
     private static func prefetch(url: URL) async {
-        if memoryCache.object(forKey: url as NSURL) != nil { return }
+        let token = cacheGeneration
+        if hasImage(for: url) { return }
         do {
             var request = URLRequest(url: url)
             request.cachePolicy = .returnCacheDataElseLoad
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse,
                   200..<300 ~= http.statusCode,
-                  !data.isEmpty else { return }
+                  !data.isEmpty, token == cacheGeneration else { return }
             // 显式写入磁盘缓存，兼容部分封面服务器没有返回可缓存响应头的情况。
             session.configuration.urlCache?.storeCachedResponse(
                 CachedURLResponse(response: response, data: data),
                 for: request
             )
-            persist(data: data, for: url)
+            persist(data: data, for: url, generation: token)
         } catch {
             // 预加载失败不影响页面显示，进入页面后 CoverImage 仍会按需重试。
         }
     }
 
-    static func persist(data: Data, for url: URL) {
+    /// 网络 + 解码全部在主线程之外完成：一屏一百多张图同时解，放在主线程上会把界面按住。
+    static func fetchAndDecode(url: URL, maxPixel: Int) async -> UIImage? {
+        await BeansDecodeLimiter.shared.acquire()
+        let image = await downloadAndDecode(url: url, maxPixel: maxPixel)
+        await BeansDecodeLimiter.shared.release()
+        return image
+    }
+
+    private static func downloadAndDecode(url: URL, maxPixel: Int) async -> UIImage? {
+        do {
+            var request = URLRequest(url: url)
+            request.cachePolicy = .returnCacheDataElseLoad
+            let (data, response) = try await session.data(for: request)
+            guard !Task.isCancelled else { return nil }
+            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
+            guard let image = decodeCover(data, maxPixel: maxPixel) else { return nil }
+            session.configuration.urlCache?.storeCachedResponse(
+                CachedURLResponse(response: response, data: data),
+                for: request
+            )
+            persist(data: data, for: url)
+            remember(image, for: url, maxPixel: maxPixel)
+            return image
+        } catch {
+            return nil
+        }
+    }
+
+    /// 预加载只关心"内存里有没有"，档位用默认那一档。
+    static func hasImage(for url: URL, maxPixel: Int = 480) -> Bool {
+        memoryCache.object(forKey: cacheKey(url, maxPixel)) != nil
+    }
+
+    /// 收到内存警告时先丢解码位图（磁盘缓存和原始数据都还在，回来重新解很快）。
+    private static var memoryWarningToken: NSObjectProtocol?
+
+    static func startObservingMemoryWarnings() {
+        guard memoryWarningToken == nil else { return }
+        memoryWarningToken = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            memoryCache.removeAllObjects()
+        }
+    }
+
+    static func persist(data: Data, for url: URL, generation token: UInt64? = nil) {
         guard !data.isEmpty else { return }
+        let token = token ?? cacheGeneration
         let destination = diskFileURL(for: url)
         diskQueue.async {
+            generationLock.lock()
+            defer { generationLock.unlock() }
+            guard token == generation else { return }
             do {
+                _ = try BeansCacheFiles.validateDirectory(diskCacheDirectory, under: diskCacheDirectory.deletingLastPathComponent())
                 try FileManager.default.createDirectory(at: diskCacheDirectory, withIntermediateDirectories: true)
                 try data.write(to: destination, options: .atomic)
                 trimDiskCacheIfNeeded()
@@ -1278,6 +1415,34 @@ final class BeansCoverImageStore {
     }
 }
 
+/// 同时最多解四张。放在 actor 里、从主 actor 之外的地方 await：
+/// 等不到只把任务挂起，不占线程。
+actor BeansDecodeLimiter {
+    static let shared = BeansDecodeLimiter()
+    private let limit = 4
+    private var active = 0
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func acquire() async {
+        if active < limit {
+            active += 1
+            return
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            waiters.append(continuation)
+        }
+        active += 1
+    }
+
+    func release() {
+        active = max(0, active - 1)
+        if let next = waiters.first {
+            waiters.removeFirst()
+            next.resume()
+        }
+    }
+}
+
 @MainActor
 private final class BeansCoverImageLoader: ObservableObject {
 
@@ -1286,6 +1451,7 @@ private final class BeansCoverImageLoader: ObservableObject {
     private var task: Task<Void, Never>?
     private var loadedURL: URL?
     private var cacheLookupURL: URL?
+    private var pixelBucket = 480
 
     /// SwiftUI may keep this StateObject alive while a row changes songs. Never
     /// render the previous request's bitmap during that handoff.
@@ -1293,7 +1459,8 @@ private final class BeansCoverImageLoader: ObservableObject {
         loadedURL == url ? image : nil
     }
 
-    func load(url: URL?) {
+    func load(url: URL?, maxPixel: Int = 480) {
+        pixelBucket = maxPixel
         if loadedURL == url {
             // `onAppear` can fire repeatedly for a recycled LazyVStack row.
             // Never clear a valid bitmap or start a second request for the
@@ -1314,13 +1481,13 @@ private final class BeansCoverImageLoader: ObservableObject {
             return
         }
 
-        if let cachedImage = BeansCoverImageStore.memoryImage(for: url) {
+        if let cachedImage = BeansCoverImageStore.memoryImage(for: url, maxPixel: pixelBucket) {
             image = cachedImage
             return
         }
 
         cacheLookupURL = url
-        BeansCoverImageStore.loadCachedImage(for: url) { [weak self] cachedImage in
+        BeansCoverImageStore.loadCachedImage(for: url, maxPixel: pixelBucket) { [weak self] cachedImage in
             guard let self, self.loadedURL == url else { return }
             self.cacheLookupURL = nil
             if let cachedImage {
@@ -1331,36 +1498,24 @@ private final class BeansCoverImageLoader: ObservableObject {
                 self.didFail = true
                 return
             }
+            let cacheGeneration = BeansCoverImageStore.cacheGeneration
+            let bucket = pixelBucket
             self.task = Task { [weak self] in
-                do {
-                    var request = URLRequest(url: url)
-                    request.cachePolicy = .returnCacheDataElseLoad
-                    let (data, response) = try await BeansCoverImageStore.session.data(for: request)
-                    guard !Task.isCancelled, let self, self.loadedURL == url else { return }
-                    guard let http = response as? HTTPURLResponse,
-                          200..<300 ~= http.statusCode,
-                          let image = UIImage(data: data) else {
-                        self.didFail = true
-                        return
-                    }
-                    BeansCoverImageStore.session.configuration.urlCache?.storeCachedResponse(
-                        CachedURLResponse(response: response, data: data),
-                        for: request
-                    )
-                    BeansCoverImageStore.persist(data: data, for: url)
-                    BeansCoverImageStore.memoryCache.setObject(image, forKey: url as NSURL)
+                let image = await BeansCoverImageStore.fetchAndDecode(url: url, maxPixel: bucket)
+                guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                self.task = nil
+                if let image {
                     self.image = image
-                    self.task = nil
-                } catch {
-                    guard !Task.isCancelled, let self, self.loadedURL == url else { return }
+                } else {
                     self.didFail = true
-                    self.task = nil
                 }
             }
         }
     }
 
-    deinit { task?.cancel() }
+    deinit {
+        task?.cancel()
+    }
 }
 
 // MARK: - 会员标识小标（SVIP 金色 / VIP 红色）
@@ -1932,3 +2087,29 @@ struct ToastView: View {
     }
 }
 
+
+/// 慢网提示：加载超过 8 秒时显示一行“仍在加载”，避免骨架屏看起来像卡死。
+struct BeansSlowLoadHint: View {
+    var text: String = "仍在加载…"
+    var delay: Double = 8
+    @State private var visible = false
+
+    var body: some View {
+        Group {
+            if visible {
+                Text(text)
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .transition(.opacity)
+            }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { visible = true }
+        }
+        .accessibilityIdentifier("beans.slow-load-hint")
+    }
+}

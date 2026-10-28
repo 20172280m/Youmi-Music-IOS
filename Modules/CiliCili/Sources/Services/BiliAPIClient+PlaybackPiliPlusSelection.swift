@@ -150,7 +150,7 @@ extension BiliAPIClient {
                     path: "/x/player/wbi/playurl",
                     query: WBISigner.sign(query, keys: keys),
                     referer: "https://www.bilibili.com/video/\(bvid)",
-                    userAgent: userAgent(for: .web),
+                    userAgent: Self.mobileUserAgent,
                     cookieHeader: context.cookieHeader,
                     cachePolicy: .reloadIgnoringLocalCacheData,
                     priority: URLSessionTask.highPriority

@@ -111,7 +111,7 @@ struct CommentsSheet: View {
                             detail: errorMessage,
                             icon: "wifi.exclamationmark"
                         )
-                        Button("重新加载") {
+                        Button("重试") {
                             Task { await load(reset: true) }
                         }
                         .buttonStyle(.borderedProminent)

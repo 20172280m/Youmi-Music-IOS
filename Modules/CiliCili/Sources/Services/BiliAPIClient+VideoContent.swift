@@ -141,14 +141,18 @@ extension BiliAPIClient {
 
     func fetchVideoRelated(bvid: String) async throws -> [VideoItem] {
         let context = await videoContentRequestContext()
+        // 只有 aid 的卡片会带 `av…` 占位，直接塞进 bvid= 会被判参数错误（-400）。
+        var query = [
+            "pn": "1",
+            "ps": "40",
+        ]
+        let identity = BiliVideoIdentityQuery.parameters(for: bvid, aidKey: "aid")
+        guard !identity.isEmpty else { throw BiliAPIError.missingPayload }
+        query.merge(identity) { _, identity in identity }
         let response: BiliResponse<[VideoItem]> = try await get(
             base: baseURL,
             path: "/x/web-interface/archive/related",
-            query: [
-                "bvid": bvid,
-                "pn": "1",
-                "ps": "40",
-            ],
+            query: query,
             userAgent: Self.webUserAgent,
             cookieHeader: context.guestModeCookieHeader,
             cachePolicy: .reloadIgnoringLocalCacheData,

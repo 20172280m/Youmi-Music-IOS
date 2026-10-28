@@ -15,6 +15,10 @@ enum WebDAVBackup {
         settings["beans.backup.meta"] = ["app": "Beans Music", "format": "beans-webdav-v1",
                                        "created": ISO8601DateFormatter().string(from: Date()),
                                        "includedAccounts": includeAccounts, "includedWallpapers": includeWallpapers]
+        // 字体文件不在 UserDefaults 里，得单独把名字和内容带进来，否则换设备恢复后字体就丢了。
+        if let font = FontManager.exportFontData() {
+            settings["beans.font.restore"] = ["name": font.name, "data": font.data.base64EncodedString()]
+        }
         guard JSONSerialization.isValidJSONObject(settings) else { throw WebDAVError.invalidBackup }
         let data = try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys, .prettyPrinted])
         guard data.count <= maximumSize else { throw WebDAVError.tooLarge }
@@ -36,12 +40,24 @@ enum WebDAVBackup {
 
     @discardableResult
     static func restore(_ validated: [String: Any], defaults: UserDefaults = .standard) -> Int {
-        for (key, value) in validated where allowed(key, accounts: true, wallpapers: true) { defaults.set(value, forKey: key) }
-        return validated.count
+        var count = 0
+        for (key, value) in validated where key != "beans.font.restore" && allowed(key, accounts: true, wallpapers: true) {
+            defaults.set(value, forKey: key)
+            count += 1
+        }
+        // 字体是文件不是偏好：写回 Documents/Fonts 并重新注册，选字体列表里才会出现它。
+        if let font = validated["beans.font.restore"] as? [String: Any],
+           let name = font["name"] as? String,
+           let encoded = font["data"] as? String,
+           let data = Data(base64Encoded: encoded),
+           FontManager.restoreFont(name: name, data: data) {
+            count += 1
+        }
+        return count
     }
 
     private static func allowed(_ key: String, accounts: Bool, wallpapers: Bool) -> Bool {
-        guard key.hasPrefix("beans."), key != "beans.backup.meta", key != "beans.font.restore",
+        guard key.hasPrefix("beans."), key != "beans.backup.meta",
               key != "beans.launchInProgress", key != "beans.wallpapers.deleted",
               !key.hasPrefix("beans.log"), !key.hasPrefix("beans.crash"), !key.hasPrefix("beans.search.") else { return false }
         let lower = key.lowercased()

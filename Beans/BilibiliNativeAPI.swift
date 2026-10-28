@@ -56,9 +56,13 @@ extension BilibiliAPI {
     }
     func nativeVideoURLs(_ track: Song, quality: Int = 64) async throws -> [URL] {
         let data = try await video(track.bilibiliID ?? "")
+        let bvid = Self.text(data["bvid"])
         let cid = track.bilibiliID?.split(separator: ":").dropFirst().first.map(String.init) ?? Self.text(data["cid"])
-        let result = try await get("/x/player/playurl", ["bvid": Self.text(data["bvid"]), "cid": cid,
-                                                       "qn": String(quality), "fnval": "1", "platform": "html5", "high_quality": "1"])
+        // 播放地址这条请求按真浏览器的方式带访客身份（buvid3/buvid4 由 B 站下发），
+        // Referer 用视频页完整地址；否则容易被风控直接挡成 HTTP 412。
+        let result = try await get("/x/player/playurl", ["bvid": bvid, "cid": cid,
+                                                       "qn": String(quality), "fnval": "1", "platform": "html5", "high_quality": "1"],
+                                   identity: true, referer: "https://www.bilibili.com/video/\(bvid)")
         let urls = BilibiliProtocol.progressiveURLs(result)
         guard !urls.isEmpty else { throw BilibiliError(message: "该视频暂未返回兼容的视频地址，请换清晰度或重试") }
         return urls

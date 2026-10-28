@@ -87,7 +87,10 @@ struct PlaylistView: View {
                 GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
                 Group {
                 if loading {
-                    BeansDetailSongsLoadingState(coverSize: 96, rowCount: 10)
+                    ZStack(alignment: .bottom) {
+                        BeansDetailSongsLoadingState(coverSize: 96, rowCount: 10)
+                        BeansSlowLoadHint().padding(.bottom, 24)
+                    }
                 } else if let errorMessage {
                     ErrorStateView(message: errorMessage) {
                         Task { await load(force: true) }
@@ -132,7 +135,8 @@ struct PlaylistView: View {
         VStack(alignment: .leading, spacing: 14) {
             if immersiveDetail {
                 BeansImmersiveDetailHeader(coverURL: playlist.coverURL, title: playlist.name,
-                                          subtitle: playlist.creatorName, metadata: beansSongCountText(tracks.count))
+                                          subtitle: playlist.creatorName, metadata: beansSongCountText(tracks.count),
+                                          descriptionText: playlistDescription)
             } else {
             HStack(spacing: isNativeClean ? 18 : 14) {
                 CoverImage(url: playlist.coverURL, size: 96, cornerRadius: 18)
@@ -161,7 +165,7 @@ struct PlaylistView: View {
                 Spacer(minLength: 0)
             }
             }
-            if let description = playlistDescription {
+            if let description = playlistDescription, !immersiveDetail {
                 Button {
                     BeansHaptics.tap()
                     showPlaylistDescription = true
@@ -309,6 +313,15 @@ struct PlaylistView: View {
         orderedTracks.firstIndex { $0.identityKey == song.identityKey } ?? 0
     }
     private func load(force: Bool = false) async {
+        // 看门狗：接口卡住时必须在可接受时间内退出骨架屏，给出提示与重试。
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            guard !Task.isCancelled, loading, tracks.isEmpty else { return }
+            BeansLogger.shared.log("歌单页面加载超时 name=\(playlist.name) id=\(playlist.id)", level: .error)
+            errorMessage = "加载超时"
+            loading = false
+        }
+        defer { watchdog.cancel() }
         let cache = SyncedPlaylistCache.shared
         if let cached = cache.cachedSongs(playlist: playlist, accountID: cacheAccountID) {
             tracks = cached.songs

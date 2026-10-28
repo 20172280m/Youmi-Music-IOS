@@ -55,6 +55,15 @@ extension UIColor {
 }
 
 extension Color {
+    /// 封面加载中的占位底色：浅色浅灰、深色深灰。白格子看起来像坏了。
+    static var beansCoverPlaceholder: Color {
+        Color(UIColor { trait in
+            trait.userInterfaceStyle == .dark
+                ? UIColor(red: 0.173, green: 0.173, blue: 0.180, alpha: 1)
+                : UIColor(red: 0.898, green: 0.898, blue: 0.918, alpha: 1)
+        })
+    }
+
     static let beansBackground = Color(uiColor: .beansBackground)
     static let beansCard = Color(uiColor: .beansCard)
     static var beansLabel: Color { Color(uiColor: .beansLabel) }

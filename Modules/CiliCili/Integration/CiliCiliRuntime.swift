@@ -60,6 +60,34 @@ public final class CiliCiliRuntime: ObservableObject {
         if isLiveRoomActive != value { isLiveRoomActive = value }
     }
 
+    /// Disk bytes and a partial memory estimate from the engine's cache summary.
+    /// VideoRangeCache is file-backed; progressive media and timed resources are in memory.
+    /// PlayURL objects and decoded-image NSCaches expose no byte usage and are excluded.
+    /// Do not add `managedBytes`: it already overlaps these individual summary fields.
+    public func resourceCacheUsage() async -> (disk: Int, memory: Int) {
+        let summary = await ResourceCacheCenter.summary()
+        let disk = [
+            summary.image.diskUsage,
+            summary.api.diskUsage,
+            summary.videoRangeMedia.estimatedBytes
+        ].reduce(0) { $0 + max(0, $1) }
+        let memory = [
+            summary.api.memoryUsage,
+            summary.apiMemory.estimatedBytes,
+            summary.progressiveMedia.estimatedBytes,
+            summary.subtitlesAndDanmaku.estimatedBytes
+        ].reduce(0) { $0 + max(0, $1) }
+        return (disk, memory)
+    }
+
+    /// Requests engine cleanup. The underlying void API suppresses some file errors;
+    /// returning is not verification that every resource was removed or usage is zero.
+    public func clearResourceCaches() async {
+        // Preserve resources owned by an active video/live detail session.
+        guard !isVideoDetailActive, !isLiveRoomActive else { return }
+        await ResourceCacheCenter.clearAll()
+    }
+
     public func stopPlaybackForMusic() {
         ActivePlaybackCoordinator.shared.stopActivePlayback()
     }

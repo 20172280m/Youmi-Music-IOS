@@ -34,7 +34,7 @@ final class KugouMusicAPI {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 18
+        config.timeoutIntervalForRequest = 12
         config.httpShouldSetCookies = false
         session = URLSession(configuration: config)
     }
