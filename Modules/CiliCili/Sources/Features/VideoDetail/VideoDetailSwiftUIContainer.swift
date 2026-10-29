@@ -598,20 +598,9 @@ private struct VideoDetailInteractivePlayerLayer: View {
                     .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
                     .zIndex(3)
                 }
-            } else {
-                // 没有播放器画面（加载中或播放地址失败）：外壳不画任何控件，
-                // 这里补一个看得见的出口，免得只能靠左缘右滑。
-                VideoDetailFallbackBackButton(action: onNavigateBack)
-                    .padding(.leading, 12)
-                    .padding(.top, safeAreaTop + 8)
-                    .frame(
-                        width: layout.playerFrame.width,
-                        height: layout.playerFrame.height,
-                        alignment: .topLeading
-                    )
-                    .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
-                    .zIndex(4)
             }
+            // 没有播放器画面时的出口挂在容器最外层，不再塞在播放器框里：
+            // 播放器框在没出画时会缩到很矮，按钮画在框外就看得到、点不到（Ato 按下无反应的那次）。
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
             .onChange(of: layout) { _, newLayout in
@@ -748,6 +737,18 @@ struct VideoDetailSwiftUIContainer: View {
                     onShowDanmakuSettings: onShowDanmakuSettings,
                     onNavigateBack: onNavigateBack
                 )
+
+                if model.surfacePlayerViewModel == nil {
+                    VideoDetailFallbackBackButton(action: onNavigateBack)
+                        .padding(.leading, 12)
+                        .padding(.top, model.rootSafeAreaInsets.top + 8)
+                        .frame(
+                            width: proxy.size.width,
+                            height: proxy.size.height,
+                            alignment: .topLeading
+                        )
+                        .zIndex(10)
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
             .onAppear {

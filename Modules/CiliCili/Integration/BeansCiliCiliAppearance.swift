@@ -30,29 +30,22 @@ struct CiliCiliHostBackdrop: View {
     }
 }
 
-/// 列表区底板：从头卡下沿起接住内容，只留上两个圆角，上下各 24pt 渐隐避免硬边。
+/// 列表区底板：从头卡下沿起接住内容，只留上两个圆角。
+///
+/// 一次 `fill` 画实心面：不用 `GeometryReader`、不用 `mask`、也不叠两层半透明，
+/// 免得实际不透明度被乘成 0.47、压在亮壁纸上等于没画（Ato 量到标题 1.6:1 的那次）。
+/// 顶边不渐隐：一渐隐，紧挨着的分段控件和标题又落回壁纸上。
 struct CiliCiliContentPanel: View {
     @ObservedObject private var appearance = CiliCiliHostAppearance.shared
     var cornerRadius: CGFloat = 24
-    var edgeFade: CGFloat = 24
 
     var body: some View {
-        GeometryReader { proxy in
-            let shape = UnevenRoundedRectangle(
-                topLeadingRadius: cornerRadius, topTrailingRadius: cornerRadius, style: .continuous
-            )
-            shape
-                .fill(appearance.contentPanelColor ?? Color(.secondarySystemBackground))
-                .mask {
-                    VStack(spacing: 0) {
-                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                            .frame(height: min(edgeFade, proxy.size.height / 3))
-                        Rectangle().fill(.black)
-                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                            .frame(height: min(edgeFade, proxy.size.height / 3))
-                    }
-                }
-        }
+        UnevenRoundedRectangle(
+            topLeadingRadius: cornerRadius,
+            topTrailingRadius: cornerRadius,
+            style: .continuous
+        )
+        .fill(appearance.contentPanelColor ?? Color(uiColor: .systemBackground))
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }

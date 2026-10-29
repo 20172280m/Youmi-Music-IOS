@@ -28,7 +28,9 @@ final class BilibiliAppearanceBridge {
             backdrop: theme.backgroundSyncAll ? AnyView(GlassBackdrop().environmentObject(theme)) : nil,
             accent: Color.beansAmber, usesLiquidGlass: usesGlass,
             // 壁纸只透在头部，列表区靠这层底板接住；同步关掉时下面只有氛围渐变，底板减淡到 0.6 就够。
-            contentPanelColor: Color.beansGlassFill.opacity(theme.backgroundSyncAll ? 0.86 : 0.6)
+            // 底板按「不透明度」算，不再乘 beansGlassFill 自带的 0.55：
+            // 叠两层半透明会被乘成 0.47，压在亮壁纸上等于没画（Ato 量到标题 1.6:1 的那次）。
+            contentPanelColor: Color(uiColor: .systemBackground).opacity(theme.backgroundSyncAll ? 0.86 : 0.6)
         )
     }
 }

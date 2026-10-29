@@ -39,6 +39,8 @@ struct UploaderVideosSection: View {
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .controlSize(.small)
+            // 底板上的按钮：主色（主题粉）压在白底上只有 2 出头，读不动，正文色才够。
+            .tint(.primary)
 
             Spacer(minLength: 0)
         }
