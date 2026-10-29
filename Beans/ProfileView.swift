@@ -2307,6 +2307,9 @@ struct SettingsView: View {
                 homeMode: true,
                 includeDynamicWallpaper: true
             )
+            // 壁纸最艳的时候，设置页只剩一层 clear 玻璃，白卡片下面的正文直接压在花上读不出来。
+            // 垫一层固定底：壁纸仍能隐约看见，字不再随壁纸颜色漂。
+            SettingsContentBase()
             SettingsCompactGlassSurface()
             if settingsContentReady {
                 settingsScrollContent
@@ -2470,7 +2473,8 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 40)
+            // 40 不够：滚到底时最后一组会停在 Home 指示条和底栏那一带，点不到。
+            .padding(.bottom, 96)
             .beansAdaptiveContentWidth()
         }
         .beansScrollIndicatorsHidden()
@@ -4913,6 +4917,23 @@ private struct SettingsLiquidSheetPresentation: ViewModifier {
 /// The iOS 26 sheet host can drop its glass sampling layer at the compact
 /// detent. Keep a single transparent glass surface only while compact, rather
 /// than stacking another glass layer after the sheet has expanded.
+/// 设置页内容底板：与 B 站内容区同一个口径（浅色白 0.86、深色近黑 0.86），
+/// 保证正文/次要文字在任何壁纸下都有稳定的对比度，壁纸只作隐约底色。
+private struct SettingsContentBase: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Rectangle()
+            .fill(
+                colorScheme == .dark
+                    ? Color(red: 0.04, green: 0.04, blue: 0.05).opacity(0.86)
+                    : Color.white.opacity(0.86)
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+    }
+}
+
 private struct SettingsCompactGlassSurface: View {
     @AppStorage("beans.disableLiquidGlass") private var disableLiquidGlass = false
     @ObservedObject private var theme = ThemeStore.shared
