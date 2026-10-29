@@ -12,6 +12,9 @@ struct UploaderFollowButton: View {
                     label
                 }
                 .buttonStyle(.bordered)
+                // 「已关注」不再跟主题色走：浅粉底上的粉字只有 1.28:1（深色 1.99:1）。
+                // 用正文色做胶囊，浅色=近黑字浅灰底、深色=白字深灰底，两档都稳。
+                .tint(Color(.label))
             } else {
                 Button(action: toggleFollow) {
                     label

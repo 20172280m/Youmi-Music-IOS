@@ -7,7 +7,7 @@ struct UploaderSignatureText: View {
         if let sign, !sign.isEmpty {
             Text(sign)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.78))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -21,7 +21,7 @@ struct UploaderFollowMessage: View {
         if let message, !message.isEmpty {
             Label(message, systemImage: isFollowing ? "checkmark.circle" : "info.circle")
                 .font(.caption)
-                .foregroundStyle(isFollowing ? Color.pink : Color.secondary)
+                .foregroundStyle(isFollowing ? Color.pink : Color.primary.opacity(0.78))
         }
     }
 }
@@ -33,7 +33,7 @@ struct UploaderProfileStatusMessage: View {
         if case .failed(let message) = state {
             Label(message, systemImage: "exclamationmark.triangle")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.78))
         }
     }
 }
@@ -67,7 +67,7 @@ private struct UploaderStatItem: View {
 
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.primary.opacity(0.78))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
