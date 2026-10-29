@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import CoreText
 
 /// 全局字体管理：把用户上传的 ttf/otf 复制到 Documents/Fonts 并动态注册，App 重启后自动重新注册
@@ -89,9 +90,18 @@ enum FontManager {
         } catch {
             return false
         }
-        guard let registered = register(file) else { return false }
-        installedFontName = registered
-        return true
+        if let registered = register(file) {
+            installedFontName = registered
+            return true
+        }
+        // 注册被拒（同一次运行里这份字体早就进过 CoreText）：只要这个名字现在真能解析出字形，
+        // 界面就能用它，按成功处理。判「能不能解析」比逐条猜 CoreText 的错误码可靠。
+        if !name.isEmpty, UIFont(name: name, size: 12) != nil {
+            installedFontName = name
+            lastRegisterError = nil
+            return true
+        }
+        return false
     }
 
     static func clear() {
@@ -149,8 +159,10 @@ enum FontManager {
         //
         // 所有权：注册失败时 error 是 +1 的，由 ctError 里的 takeRetainedValue 消费，这里不能再次 release。
         if let failure = ctError(error) {
-            if failure.domain == (kCTFontManagerErrorDomain as String),
-               failure.code == CTFontManagerError.alreadyRegistered.rawValue {
+            // 域在系统里写作 com.apple.CoreText.CTFontManagerErrorDomain，常量是 CTFontManagerErrorDomain，
+            // 比较后缀更稳。105=已注册、304=PostScript 名重复，都等于「这份字体本进程已有」。
+            if failure.domain.hasSuffix("CTFontManagerErrorDomain"),
+               failure.code == CTFontManagerError.alreadyRegistered.rawValue || failure.code == 304 {
                 return postScriptName(of: font)
             }
             lastRegisterError = "\(failure.domain) \(failure.code)"
