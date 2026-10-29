@@ -130,21 +130,18 @@ enum FontManager {
         if CTFontManagerRegisterGraphicsFont(font, &error) {
             return font.postScriptName as String?
         }
-        // clear() 只删文件、不向 CoreText 注销，所以同一次运行里「恢复默认字体 → 再恢复同一份备份」时
-        // 这份字体还挂在进程里，注册会回 alreadyRegistered。先卸掉旧注册再试一次；
-        // 卸不掉就如实返回失败，让调用方提示用户重启后再恢复，别静默当成装上了。
+        // clear()/「恢复默认字体」只删文件、不向 CoreText 注销，所以同一次运行里再恢复同一份字体时，
+        // 注册会回 alreadyRegistered。这里直接按「已安装」算：字体在本进程里本来就能用，
+        // 文件也已写回 Documents/Fonts，下次启动会照常重新注册。
         //
-        // 注意所有权：注册失败时 error 是 +1 的，由 isAlreadyRegistered 里的 takeRetainedValue 消费，
-        // 这里不能再 release，否则双重释放。
-        guard isAlreadyRegistered(error) else { return nil }
-        var unregisterError: Unmanaged<CFError>?
-        _ = CTFontManagerUnregisterGraphicsFont(font, &unregisterError)
-        unregisterError?.release()
-        var retryError: Unmanaged<CFError>?
-        if CTFontManagerRegisterGraphicsFont(font, &retryError) {
+        // 曾经试过「先 unregister 再注册」，在模拟器上卸不掉（重注册仍报 alreadyRegistered），
+        // 结果恢复备份时字体悄悄没装上、项数也少一项。判「已在进程里」比卸注册可靠。
+        //
+        // 所有权：注册失败时 error 是 +1 的，由 isAlreadyRegistered 里的 takeRetainedValue 消费，
+        // 这里无论结果如何都不能再 release，否则双重释放。
+        if isAlreadyRegistered(error) {
             return font.postScriptName as String?
         }
-        retryError?.release()
         return nil
     }
 

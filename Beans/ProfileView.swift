@@ -4447,19 +4447,27 @@ struct SettingsView: View {
         // 恢复歌词背景图片：路径变化时按备份的 base64 重建文件
         LyricBackgroundStore.restoreFromBackup()
         // 恢复字体文件
+        var fontFailed = false
         if let fontPayload = json["beans.font.restore"] as? [String: Any],
            let name = fontPayload["name"] as? String,
            let b64 = fontPayload["data"] as? String,
            let fontData = Data(base64Encoded: b64) {
             if FontManager.restoreFont(name: name, data: fontData) {
                 count += 1
+            } else {
+                fontFailed = true
             }
         }
-        BeansLogger.shared.log("恢复配置备份：\(count) 项设置", level: .info)
+        BeansLogger.shared.log("恢复配置备份：\(count) 项设置（字体\(fontFailed ? "失败" : "完成")）", level: .info)
         if count > 0 {
             BeansHaptics.success()
-            backupMessage = "已恢复 \(count) 项设置，部分设置需重启应用后完全生效"
-            ToastCenter.shared.show("已恢复 \(count) 项设置")
+            if fontFailed {
+                backupMessage = "已恢复 \(count) 项设置，字体这次没装上：重启应用后再恢复一次备份"
+                ToastCenter.shared.show("已恢复 \(count) 项设置，字体需重启后再恢复一次")
+            } else {
+                backupMessage = "已恢复 \(count) 项设置，部分设置需重启应用后完全生效"
+                ToastCenter.shared.show("已恢复 \(count) 项设置")
+            }
         } else {
             backupMessage = "备份中未找到可恢复的设置"
         }
