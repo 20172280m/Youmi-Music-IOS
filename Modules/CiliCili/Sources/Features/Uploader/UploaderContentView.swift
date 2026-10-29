@@ -61,6 +61,14 @@ struct UploaderContentView: View {
 
     @ViewBuilder
     private var scrollContent: some View {
+        ZStack(alignment: .top) {
+            CiliCiliHeaderScrim()
+            pullRefreshContent
+        }
+    }
+
+    @ViewBuilder
+    private var pullRefreshContent: some View {
         if allowsPullToRefresh {
             baseScrollContent
                 .nativePullRefresh(
@@ -82,21 +90,26 @@ struct UploaderContentView: View {
         ScrollView {
             UploaderContentWidthReader()
 
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 16) {
                 UploaderHeaderView(owner: owner, viewModel: viewModel)
 
-                Picker("内容", selection: $selectedSection) {
-                    ForEach(UploaderProfileSection.allCases) { section in
-                        Text(section.title).tag(section)
+                // 壁纸只留在头部；从分段控件起接一层 0.92 底板，网格标题压在照片上就没法读了。
+                VStack(alignment: .leading, spacing: 18) {
+                    Picker("内容", selection: $selectedSection) {
+                        ForEach(UploaderProfileSection.allCases) { section in
+                            Text(section.title).tag(section)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .padding(.horizontal, 12)
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .padding(.horizontal, 12)
 
-                selectedContent
+                    selectedContent
+                }
+                .padding(.bottom, 24)
+                .background(alignment: .top) { CiliCiliContentPanel() }
             }
-            .padding(.vertical, 12)
+            .padding(.top, 12)
         }
         .onPreferenceChange(UploaderContentWidthPreferenceKey.self, perform: updateContentWidth)
         .customPullRefreshTracking(

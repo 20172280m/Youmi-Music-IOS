@@ -61,7 +61,6 @@ private struct UploaderInitialLoadingView: View {
                 .padding(.vertical, 12)
             }
             .scrollDisabled(true)
-            .background { CiliCiliHostBackdrop() }
         }
         .allowsHitTesting(false)
         .accessibilityLabel("正在加载 UP 主主页")

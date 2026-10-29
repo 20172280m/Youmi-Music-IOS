@@ -71,8 +71,12 @@ struct WebDAVView: View {
             .confirmationDialog("恢复这个 WebDAV 备份？", isPresented: $showRestore, titleVisibility: .visible) {
                 Button("恢复设置") {
                     if let pendingRestore {
-                        let count = WebDAVBackup.restore(pendingRestore)
-                        message = "已恢复 \(count) 项设置，重新启动应用后生效。"
+                        let result = WebDAVBackup.restore(pendingRestore)
+                        if result.fontPending {
+                            message = "已恢复 \(result.count) 项设置。字体这次没装上，请重新启动应用后再恢复一次这个备份。"
+                        } else {
+                            message = "已恢复 \(result.count) 项设置，重新启动应用后生效。"
+                        }
                     }
                     pendingRestore = nil
                 }

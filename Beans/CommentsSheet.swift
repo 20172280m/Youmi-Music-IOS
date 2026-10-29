@@ -76,7 +76,12 @@ struct CommentsSheet: View {
     var body: some View {
         Group {
             if song.source == .bilibili {
-                BilibiliAudioCommentsPage(song: song)
+                // B 站歌这一支原来自带一层不透明底，跟普通歌进评论区的观感差一截。
+                // 用同一套 commentsBackground（半屏玻璃、全屏系统底），两个入口就同源了。
+                ZStack {
+                    commentsBackground
+                    BilibiliAudioCommentsPage(song: song)
+                }
             } else if presentation == .reference {
                 referenceCommentsView
             } else {

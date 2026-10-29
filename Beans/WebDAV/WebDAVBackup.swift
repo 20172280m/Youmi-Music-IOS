@@ -38,22 +38,31 @@ enum WebDAVBackup {
         return result
     }
 
-    @discardableResult
-    static func restore(_ validated: [String: Any], defaults: UserDefaults = .standard) -> Int {
+    struct RestoreResult {
         var count = 0
+        /// 备份里带了字体，但这次没装上（例如同一次运行里字体还挂在 CoreText 上卸不掉）。
+        var fontPending = false
+    }
+
+    @discardableResult
+    static func restore(_ validated: [String: Any], defaults: UserDefaults = .standard) -> RestoreResult {
+        var result = RestoreResult()
         for (key, value) in validated where key != "beans.font.restore" && allowed(key, accounts: true, wallpapers: true) {
             defaults.set(value, forKey: key)
-            count += 1
+            result.count += 1
         }
         // 字体是文件不是偏好：写回 Documents/Fonts 并重新注册，选字体列表里才会出现它。
         if let font = validated["beans.font.restore"] as? [String: Any],
            let name = font["name"] as? String,
            let encoded = font["data"] as? String,
-           let data = Data(base64Encoded: encoded),
-           FontManager.restoreFont(name: name, data: data) {
-            count += 1
+           let data = Data(base64Encoded: encoded) {
+            if FontManager.restoreFont(name: name, data: data) {
+                result.count += 1
+            } else {
+                result.fontPending = true
+            }
         }
-        return count
+        return result
     }
 
     private static func allowed(_ key: String, accounts: Bool, wallpapers: Bool) -> Bool {

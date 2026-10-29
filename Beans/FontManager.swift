@@ -127,8 +127,31 @@ enum FontManager {
         guard let data = try? Data(contentsOf: url) else { return nil }
         guard let provider = CGDataProvider(data: data as CFData), let font = CGFont(provider) else { return nil }
         var error: Unmanaged<CFError>?
-        guard CTFontManagerRegisterGraphicsFont(font, &error) else { return nil }
-        return font.postScriptName as String?
+        if CTFontManagerRegisterGraphicsFont(font, &error) {
+            return font.postScriptName as String?
+        }
+        // clear() 只删文件、不向 CoreText 注销，所以同一次运行里「恢复默认字体 → 再恢复同一份备份」时
+        // 这份字体还挂在进程里，注册会回 alreadyRegistered。先卸掉旧注册再试一次；
+        // 卸不掉就如实返回失败，让调用方提示用户重启后再恢复，别静默当成装上了。
+        //
+        // 注意所有权：注册失败时 error 是 +1 的，由 isAlreadyRegistered 里的 takeRetainedValue 消费，
+        // 这里不能再 release，否则双重释放。
+        guard isAlreadyRegistered(error) else { return nil }
+        var unregisterError: Unmanaged<CFError>?
+        _ = CTFontManagerUnregisterGraphicsFont(font, &unregisterError)
+        unregisterError?.release()
+        var retryError: Unmanaged<CFError>?
+        if CTFontManagerRegisterGraphicsFont(font, &retryError) {
+            return font.postScriptName as String?
+        }
+        retryError?.release()
+        return nil
+    }
+
+    private static func isAlreadyRegistered(_ error: Unmanaged<CFError>?) -> Bool {
+        guard let cfError = error?.takeRetainedValue() else { return false }
+        guard CFErrorGetDomain(cfError) as String == kCTFontManagerErrorDomain as String else { return false }
+        return CFErrorGetCode(cfError) == CTFontManagerError.alreadyRegistered.rawValue
     }
 }
 
