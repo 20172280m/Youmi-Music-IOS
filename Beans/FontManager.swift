@@ -121,35 +121,59 @@ enum FontManager {
         }
     }
 
+    /// 最近一次注册失败的原因，供恢复备份的提示与日志使用
+    private(set) static var lastRegisterError: String?
+
     @discardableResult
     private static func register(_ url: URL) -> String? {
         // 用 Data 读取避免安全作用域/CGDataProvider(url:) 兼容问题，iOS 上更稳
-        guard let data = try? Data(contentsOf: url) else { return nil }
-        guard let provider = CGDataProvider(data: data as CFData), let font = CGFont(provider) else { return nil }
+        lastRegisterError = nil
+        guard let data = try? Data(contentsOf: url) else {
+            lastRegisterError = "读不到字体文件"
+            return nil
+        }
+        guard let provider = CGDataProvider(data: data as CFData), let font = CGFont(provider) else {
+            lastRegisterError = "字体数据无法解析"
+            return nil
+        }
         var error: Unmanaged<CFError>?
         if CTFontManagerRegisterGraphicsFont(font, &error) {
-            return font.postScriptName as String?
+            return postScriptName(of: font)
         }
         // clear()/「恢复默认字体」只删文件、不向 CoreText 注销，所以同一次运行里再恢复同一份字体时，
         // 注册会回 alreadyRegistered。这里直接按「已安装」算：字体在本进程里本来就能用，
         // 文件也已写回 Documents/Fonts，下次启动会照常重新注册。
         //
-        // 曾经试过「先 unregister 再注册」，在模拟器上卸不掉（重注册仍报 alreadyRegistered），
-        // 结果恢复备份时字体悄悄没装上、项数也少一项。判「已在进程里」比卸注册可靠。
+        // 曾经试过「先 unregister 再注册」，在模拟器上卸不掉（重注册仍报 alreadyRegistered）；
+        // 现在连 alreadyRegistered 也不认作成功了，所以把 CoreText 的原话留在 lastRegisterError 里。
         //
-        // 所有权：注册失败时 error 是 +1 的，由 isAlreadyRegistered 里的 takeRetainedValue 消费，
-        // 这里无论结果如何都不能再 release，否则双重释放。
-        if isAlreadyRegistered(error) {
-            return font.postScriptName as String?
+        // 所有权：注册失败时 error 是 +1 的，由 ctError 里的 takeRetainedValue 消费，这里不能再次 release。
+        if let failure = ctError(error) {
+            if failure.domain == (kCTFontManagerErrorDomain as String),
+               failure.code == CTFontManagerError.alreadyRegistered.rawValue {
+                return postScriptName(of: font)
+            }
+            lastRegisterError = "\(failure.domain) \(failure.code)"
+        } else {
+            lastRegisterError = "注册返回失败但没有错误对象"
         }
         return nil
     }
 
-    private static func isAlreadyRegistered(_ error: Unmanaged<CFError>?) -> Bool {
-        guard let cfError = error?.takeRetainedValue() else { return false }
-        guard CFErrorGetDomain(cfError) as String == kCTFontManagerErrorDomain as String else { return false }
-        return CFErrorGetCode(cfError) == CTFontManagerError.alreadyRegistered.rawValue
+    private static func postScriptName(of font: CGFont) -> String? {
+        guard let name = font.postScriptName as String?, !name.isEmpty else {
+            lastRegisterError = "字体没有 PostScript 名称"
+            return nil
+        }
+        return name
     }
+
+    /// 取 CoreText 错误域与码；takeRetainedValue 会消费掉注册失败时 +1 的那份引用
+    private static func ctError(_ error: Unmanaged<CFError>?) -> (domain: String, code: Int)? {
+        guard let cfError = error?.takeRetainedValue() else { return nil }
+        return (CFErrorGetDomain(cfError) as String, CFErrorGetCode(cfError))
+    }
+
 }
 
 /// 全局字体快捷入口：已上传字体时全局使用自定义字体，否则回退系统字体（支持 design 回退）

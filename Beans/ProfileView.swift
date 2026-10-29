@@ -4462,7 +4462,8 @@ struct SettingsView: View {
         if count > 0 {
             BeansHaptics.success()
             if fontFailed {
-                backupMessage = "已恢复 \(count) 项设置，字体这次没装上：重启应用后再恢复一次备份"
+                let reason = FontManager.lastRegisterError ?? "未知原因"
+                backupMessage = "已恢复 \(count) 项设置，字体这次没装上（\(reason)）：重启应用后再恢复一次备份"
                 ToastCenter.shared.show("已恢复 \(count) 项设置，字体需重启后再恢复一次")
             } else {
                 backupMessage = "已恢复 \(count) 项设置，部分设置需重启应用后完全生效"
