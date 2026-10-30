@@ -2338,14 +2338,14 @@ struct SettingsView: View {
                 HighRefreshKeeper.shared.suspendTemporarily()
             }
         }
-        .sheet(isPresented: $showWallpaperPicker) {
+        .fullScreenCover(isPresented: $showWallpaperPicker) {
             WallpaperPhotoPicker { data in
                 theme.addWallpaper(data, for: wallpaperAppearanceTarget.colorScheme)
                 BeansHaptics.success()
             }
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showWaterWallpaperPicker) {
+        .fullScreenCover(isPresented: $showWaterWallpaperPicker) {
             WallpaperPhotoPicker(allowsMultiple: false) { data in
                 dynamicWallpaper.setWaterImage(data)
                 BeansHaptics.success()
@@ -2353,7 +2353,7 @@ struct SettingsView: View {
             }
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showFloatingImagePicker) {
+        .fullScreenCover(isPresented: $showFloatingImagePicker) {
             WallpaperPhotoPicker(allowsMultiple: false) { data in
                 if let base64 = normalizedFloatingImageBase64(from: data) {
                     globalFloatingImageData = base64
