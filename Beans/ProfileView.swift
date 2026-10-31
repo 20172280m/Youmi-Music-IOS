@@ -3558,11 +3558,15 @@ struct SettingsView: View {
                                 Text("上传壁纸（可多张）")
                                     .font(BeansFont.appFont(15))
                                     .foregroundStyle(Color.beansLabel)
-                                Spacer()
+                                Spacer(minLength: 8)
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 22))
                                     .foregroundStyle(Color.beansAmber)
                             }
+                            // 这一行实测点不动：label 里带 Spacer 时，.plain 按钮的命中去只剩字形，
+                            // 22pt 高的行几乎抓不到。给足 44pt 高并显式声明矩形命中区。
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
