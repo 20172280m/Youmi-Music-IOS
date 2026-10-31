@@ -504,18 +504,24 @@ struct ProfileView: View {
                 .environmentObject(theme)
         }
         .sheet(isPresented: $showAvatarPicker) {
-            AvatarMediaPicker { selection in
-                if selection.isVideo {
-                    avatarStore.saveVideo(data: selection.data, fileExtension: selection.fileExtension)
-                } else {
-                    avatarStore.save(data: selection.data)
-                }
-            }
+            AvatarMediaPicker(
+                onPicked: { selection in
+                    if selection.isVideo {
+                        avatarStore.saveVideo(data: selection.data, fileExtension: selection.fileExtension)
+                    } else {
+                        avatarStore.save(data: selection.data)
+                    }
+                },
+                onFinish: { showAvatarPicker = false }
+            )
         }
         .sheet(isPresented: $showProfileNameBackgroundPicker) {
-            AvatarMediaPicker { selection in
-                profileNameBackgroundStore.save(data: selection.data, fileExtension: selection.fileExtension)
-            }
+            AvatarMediaPicker(
+                onPicked: { selection in
+                    profileNameBackgroundStore.save(data: selection.data, fileExtension: selection.fileExtension)
+                },
+                onFinish: { showProfileNameBackgroundPicker = false }
+            )
         }
         .sheet(isPresented: $showSettings) {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
@@ -5519,6 +5525,8 @@ struct AvatarMediaSelection {
 /// 头像可从相册选择静态图片或视频；视频保留为本地文件供头像循环播放。
 struct AvatarMediaPicker: UIViewControllerRepresentable {
     let onPicked: (AvatarMediaSelection) -> Void
+    /// 同 WallpaperPhotoPicker：自己 dismiss 会让 SwiftUI 的 isPresented 卡在 true。
+    var onFinish: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -5539,7 +5547,7 @@ struct AvatarMediaPicker: UIViewControllerRepresentable {
         init(_ parent: AvatarMediaPicker) { self.parent = parent }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
+            parent.onFinish()
             guard let provider = results.first?.itemProvider else { return }
 
             if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {

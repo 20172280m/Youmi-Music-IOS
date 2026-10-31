@@ -213,11 +213,14 @@ struct FeedbackSheet: View {
             }
         }
         .sheet(isPresented: $showPhotoPicker) {
-            FeedbackPhotoPicker { results in
-                Task { @MainActor in
-                    await importPhotoResults(results)
-                }
-            }
+            FeedbackPhotoPicker(
+                onPick: { results in
+                    Task { @MainActor in
+                        await importPhotoResults(results)
+                    }
+                },
+                onFinish: { showPhotoPicker = false }
+            )
         }
         .sheet(isPresented: $showDocumentPicker) {
             FeedbackDocumentPicker { urls in
@@ -545,9 +548,11 @@ struct FeedbackSheet: View {
 
 private struct FeedbackPhotoPicker: UIViewControllerRepresentable {
     let onPick: ([PHPickerResult]) -> Void
+    /// 不让相册自己 dismiss，交给 SwiftUI 关，否则 isPresented 会卡在 true。
+    var onFinish: () -> Void = {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onPick: onPick)
+        Coordinator(onPick: onPick, onFinish: onFinish)
     }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
@@ -563,14 +568,16 @@ private struct FeedbackPhotoPicker: UIViewControllerRepresentable {
 
     final class Coordinator: NSObject, PHPickerViewControllerDelegate {
         let onPick: ([PHPickerResult]) -> Void
+        let onFinish: () -> Void
 
-        init(onPick: @escaping ([PHPickerResult]) -> Void) {
+        init(onPick: @escaping ([PHPickerResult]) -> Void, onFinish: @escaping () -> Void) {
             self.onPick = onPick
+            self.onFinish = onFinish
         }
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             onPick(results)
-            picker.dismiss(animated: true)
+            onFinish()
         }
     }
 }
