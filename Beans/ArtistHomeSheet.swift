@@ -369,7 +369,10 @@ struct ArtistHomeSheet: View {
     private var contentBase: some View {
         VStack(spacing: 0) {
             // 空出头部那一截，壁纸在那一段还是主角。
-            Color.clear.frame(height: 57 + collapsedHeaderHeight)
+            // 展开时再往上抬 60：内容第一行是搜索框，它比头部下沿高出这一段，
+            // 不抬就会悬在壁纸上、跟面板之间留一条缝。抬升量随收起进度收回，
+            // 收起后上沿仍然贴着头部下沿，不会盖住顶部那条带子。
+            Color.clear.frame(height: max(0, 57 + collapsedHeaderHeight - 60 * (1 - collapseProgress)))
             baseShape
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
