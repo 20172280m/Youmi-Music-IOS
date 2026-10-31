@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
@@ -2339,11 +2340,16 @@ struct SettingsView: View {
             }
         }
         .fullScreenCover(isPresented: $showWallpaperPicker) {
-            WallpaperPhotoPicker { data in
-                theme.addWallpaper(data, for: wallpaperAppearanceTarget.colorScheme)
-                BeansHaptics.success()
+            ZStack {
+                Color.red
+                WallpaperPhotoPicker { data in
+                    theme.addWallpaper(data, for: wallpaperAppearanceTarget.colorScheme)
+                    BeansHaptics.success()
+                }
             }
             .ignoresSafeArea()
+            .onAppear { BeansPickerProbe.log("wallpaper cover appeared") }
+            .onDisappear { BeansPickerProbe.log("wallpaper cover disappeared") }
         }
         .fullScreenCover(isPresented: $showWaterWallpaperPicker) {
             WallpaperPhotoPicker(allowsMultiple: false) { data in
@@ -3545,6 +3551,7 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
                         Button {
+                            BeansPickerProbe.log("wallpaper upload tapped")
                             showWallpaperPicker = true
                         } label: {
                             HStack(spacing: 8) {
@@ -5460,6 +5467,7 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
+        BeansPickerProbe.log("making PHPicker")
         var config = PHPickerConfiguration()
         config.filter = .images
         // Explicitly use a generous finite limit. `0` means unlimited on most
@@ -5650,3 +5658,11 @@ struct BackupDocumentPicker: UIViewControllerRepresentable {
     }
 }
 
+
+
+enum BeansPickerProbe {
+    private static let logger = Logger(subsystem: "com.beans.app", category: "picker-probe")
+    static func log(_ message: String) {
+        logger.error("PROBE \(message, privacy: .public)")
+    }
+}
