@@ -369,14 +369,22 @@ struct ArtistHomeSheet: View {
     private var contentBase: some View {
         VStack(spacing: 0) {
             // 空出头部那一截，壁纸在那一段还是主角。
-            // 上沿严格贴着头部下沿：收起过程中面板不会先一步升到还在淡出的名字上面
-            //（抬 60 那版实测会横切过名字，看着像一块脏带子）。
-            Color.clear.frame(height: 57 + collapsedHeaderHeight)
+            Color.clear.frame(height: contentBaseTop)
             baseShape
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
+    }
+
+    /// 面板上沿：跟着内容一起走——内容上移多少，上沿就上移多少。
+    /// 用过「贴着头部下沿」，但头部在下沿是按各段内容高度缩的，缩得比文字淡出快，
+    /// 那条边会从还在淡出的名字中间扫过去（实测 p≈0.13 就扫到了）。
+    /// 下限是收起后那条带子的下沿 132，再往上会把带子盖住。
+    private var contentBaseTop: CGFloat {
+        let span = max(44, formulaHeaderHeight - 44)   // 与收起进度 p 的分母同一个数
+        let resting = 57 + headerHeight
+        return max(132, resting - collapseProgress * span)
     }
 
     private var baseShape: some View {
