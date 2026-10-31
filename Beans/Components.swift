@@ -1,3 +1,4 @@
+import CiliCiliKit
 import SwiftUI
 import UIKit
 import CryptoKit
@@ -1603,7 +1604,9 @@ struct GlassButton: View {
                 if prominent {
                     ZStack {
                         BeansGlass(shape: Capsule(), forceLiquid: true)
-                        Capsule().fill(Color.beansAmber.opacity(0.78))
+                        // 白字压实底：0.78 的琥珀色透出底色后只剩 3.9:1（专辑页实测），
+                        // 现在按 4.65 反算填充，主题色换了也跟着算。
+                        Capsule().fill(AppThemeContrastTokens.filledBackground(from: Color.beansAmber))
                     }
                 } else if forceLiquid {
                     BeansGlass(shape: Capsule(), forceLiquid: true)
