@@ -369,10 +369,9 @@ struct ArtistHomeSheet: View {
     private var contentBase: some View {
         VStack(spacing: 0) {
             // 空出头部那一截，壁纸在那一段还是主角。
-            // 展开时再往上抬 60：内容第一行是搜索框，它比头部下沿高出这一段，
-            // 不抬就会悬在壁纸上、跟面板之间留一条缝。抬升量随收起进度收回，
-            // 收起后上沿仍然贴着头部下沿，不会盖住顶部那条带子。
-            Color.clear.frame(height: max(0, 57 + collapsedHeaderHeight - 60 * (1 - collapseProgress)))
+            // 上沿严格贴着头部下沿：收起过程中面板不会先一步升到还在淡出的名字上面
+            //（抬 60 那版实测会横切过名字，看着像一块脏带子）。
+            Color.clear.frame(height: 57 + collapsedHeaderHeight)
             baseShape
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -441,7 +440,11 @@ struct ArtistHomeSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        // 沉浸态这一条悬在壁纸上、又不在面板里：玻璃会透出照片颜色，
+        // 换成实底，占位字和输入的字都不再随壁纸漂。
+        .background(immersiveDetail ? AnyShapeStyle(Color.beansBackground)
+                                    : AnyShapeStyle(.ultraThinMaterial),
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
