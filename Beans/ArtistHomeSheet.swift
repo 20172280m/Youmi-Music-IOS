@@ -224,6 +224,12 @@ struct ArtistHomeSheet: View {
             // 歌手页沿用主页壁纸，不受“同步到全部页面”开关影响。
             GlassBackdrop(customColor: theme.customBackground, homeMode: true)
                 .ignoresSafeArea()
+            // 壁纸留给头部当主角，正文区不再直接压在照片上：
+            // 从头部下沿起垫一层实底，卡片标题、歌手名、搜索框才有一条稳定的底。
+            // 上沿跟着头部收起往上升，全程贴着头部下沿，中间不留一条透壁纸的缝。
+            if immersiveDetail {
+                contentBase
+            }
             Group {
                 if loading {
                     ZStack(alignment: .bottom) {
@@ -356,6 +362,40 @@ struct ArtistHomeSheet: View {
         }
         // 导航栏自己的材质会把顶部带子压亮一层，形成一条看得见的边；沉浸态整条透明。
         .toolbarBackground(immersiveDetail ? .hidden : .automatic, for: .navigationBar)
+    }
+
+    /// 正文区的底：上沿＝头部当前下沿。实底而不是玻璃：卡片标题是 12 点灰字，
+    /// 只有实底能保证它不随壁纸亮度漂（壁纸是用户照片，什么颜色都可能有）。
+    private var contentBase: some View {
+        VStack(spacing: 0) {
+            // 空出头部那一截，壁纸在那一段还是主角。
+            Color.clear.frame(height: 57 + collapsedHeaderHeight)
+            baseShape
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
+    }
+
+    private var baseShape: some View {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 24,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 24,
+            style: .continuous
+        )
+        .fill(Color.beansBackground)
+        .overlay {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
+            .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        }
     }
 
     /// 顶部那一道渐变，整页只有这一层：颜色来自本页自己算的封面主色。
