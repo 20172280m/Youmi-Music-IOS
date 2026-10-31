@@ -369,22 +369,12 @@ struct ArtistHomeSheet: View {
     private var contentBase: some View {
         VStack(spacing: 0) {
             // 空出头部那一截，壁纸在那一段还是主角。
-            Color.clear.frame(height: contentBaseTop)
+            Color.clear.frame(height: 57 + collapsedHeaderHeight)
             baseShape
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
-    }
-
-    /// 面板上沿：跟着内容一起走——内容上移多少，上沿就上移多少。
-    /// 用过「贴着头部下沿」，但头部在下沿是按各段内容高度缩的，缩得比文字淡出快，
-    /// 那条边会从还在淡出的名字中间扫过去（实测 p≈0.13 就扫到了）。
-    /// 下限是收起后那条带子的下沿 132，再往上会把带子盖住。
-    private var contentBaseTop: CGFloat {
-        let span = max(44, formulaHeaderHeight - 44)   // 与收起进度 p 的分母同一个数
-        let resting = 57 + headerHeight
-        return max(132, resting - collapseProgress * span)
     }
 
     private var baseShape: some View {
@@ -448,11 +438,7 @@ struct ArtistHomeSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        // 沉浸态这一条悬在壁纸上、又不在面板里：玻璃会透出照片颜色，
-        // 换成实底，占位字和输入的字都不再随壁纸漂。
-        .background(immersiveDetail ? AnyShapeStyle(Color.beansBackground)
-                                    : AnyShapeStyle(.ultraThinMaterial),
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     @ViewBuilder
