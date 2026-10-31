@@ -3,8 +3,8 @@ import Foundation
 // ⚠️ 生成文件，勿手改、勿单独提交：由 scripts/gen-build-stamp.sh 覆盖。
 /// 构建戳常量：由 scripts/gen-build-stamp.sh 在编之前整份重写，装机抹不掉。
 enum BeansBuildInfo {
-    static let compiledAt = "2026-10-31 01:00 UTC"
-    static let commit = "138d8d7"
+    static let compiledAt = "2026-10-31 01:06 UTC"
+    static let commit = "11615e3"
 }
 
 /// 一行构建标识：版本、构建号、编译时间、提交短号。
