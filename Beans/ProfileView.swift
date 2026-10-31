@@ -1,5 +1,4 @@
 import SwiftUI
-import OSLog
 import UIKit
 import PhotosUI
 import UniformTypeIdentifiers
@@ -2340,31 +2339,38 @@ struct SettingsView: View {
             }
         }
         .fullScreenCover(isPresented: $showWallpaperPicker) {
-            ZStack {
-                Color.red
-                WallpaperPhotoPicker { data in
+            WallpaperPhotoPicker(
+                onPicked: { data in
                     theme.addWallpaper(data, for: wallpaperAppearanceTarget.colorScheme)
                     BeansHaptics.success()
-                }
-            }
+                },
+                // 必须由 SwiftUI 关这层，不能让相册选择器自己 dismiss（见 WallpaperPhotoPicker 注释）。
+                onFinish: { showWallpaperPicker = false }
+            )
             .ignoresSafeArea()
-            .onAppear { BeansPickerProbe.log("wallpaper cover appeared") }
-            .onDisappear { BeansPickerProbe.log("wallpaper cover disappeared") }
         }
         .fullScreenCover(isPresented: $showWaterWallpaperPicker) {
-            WallpaperPhotoPicker(allowsMultiple: false) { data in
-                dynamicWallpaper.setWaterImage(data)
-                BeansHaptics.success()
-                ToastCenter.shared.show("Water 壁纸已更新")
-            }
+            WallpaperPhotoPicker(
+                allowsMultiple: false,
+                onPicked: { data in
+                    dynamicWallpaper.setWaterImage(data)
+                    BeansHaptics.success()
+                    ToastCenter.shared.show("Water 壁纸已更新")
+                },
+                onFinish: { showWaterWallpaperPicker = false }
+            )
             .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showFloatingImagePicker) {
-            WallpaperPhotoPicker(allowsMultiple: false) { data in
-                if let base64 = normalizedFloatingImageBase64(from: data) {
-                    globalFloatingImageData = base64
-                }
-            }
+            WallpaperPhotoPicker(
+                allowsMultiple: false,
+                onPicked: { data in
+                    if let base64 = normalizedFloatingImageBase64(from: data) {
+                        globalFloatingImageData = base64
+                    }
+                },
+                onFinish: { showFloatingImagePicker = false }
+            )
             .ignoresSafeArea()
         }
         .fullScreenCover(isPresented: $showFontImporter) {
@@ -3551,7 +3557,6 @@ struct SettingsView: View {
                             .foregroundStyle(Color.beansAmber)
                             .frame(width: 28)
                         Button {
-                            BeansPickerProbe.log("wallpaper upload tapped")
                             showWallpaperPicker = true
                         } label: {
                             HStack(spacing: 8) {
@@ -3563,10 +3568,6 @@ struct SettingsView: View {
                                     .font(.system(size: 22))
                                     .foregroundStyle(Color.beansAmber)
                             }
-                            // 这一行实测点不动：label 里带 Spacer 时，.plain 按钮的命中去只剩字形，
-                            // 22pt 高的行几乎抓不到。给足 44pt 高并显式声明矩形命中区。
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -5467,11 +5468,15 @@ private struct EqualizerResponseView: View {
 struct WallpaperPhotoPicker: UIViewControllerRepresentable {
     var allowsMultiple = true
     let onPicked: (Data) -> Void
+    /// 由外层把 isPresented 归位。
+    /// 之前 coordinator 直接 picker.dismiss(animated:)——UIKit 把界面关掉了，
+    /// 但 SwiftUI 那边的 isPresented 还是 true，于是这个按钮从此再也弹不出来
+    /// （要等设置页整层重建才会「自己」弹一次）。相册、Water 壁纸、悬浮图三处同一个坑。
+    var onFinish: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
-        BeansPickerProbe.log("making PHPicker")
         var config = PHPickerConfiguration()
         config.filter = .images
         // Explicitly use a generous finite limit. `0` means unlimited on most
@@ -5489,7 +5494,7 @@ struct WallpaperPhotoPicker: UIViewControllerRepresentable {
         let parent: WallpaperPhotoPicker
         init(_ parent: WallpaperPhotoPicker) { self.parent = parent }
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-            picker.dismiss(animated: true)
+            parent.onFinish()
             for result in results {
                 let provider = result.itemProvider
                 if provider.canLoadObject(ofClass: UIImage.self) {
@@ -5663,10 +5668,3 @@ struct BackupDocumentPicker: UIViewControllerRepresentable {
 }
 
 
-
-enum BeansPickerProbe {
-    private static let logger = Logger(subsystem: "com.beans.app", category: "picker-probe")
-    static func log(_ message: String) {
-        logger.error("PROBE \(message, privacy: .public)")
-    }
-}

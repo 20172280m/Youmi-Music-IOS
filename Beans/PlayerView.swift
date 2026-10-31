@@ -6577,15 +6577,18 @@ struct PlayerSettingsSheet: View {
             }
         }
         .fullScreenCover(isPresented: $showLyricBackgroundPicker) {
-            WallpaperPhotoPicker { data in
-                if let path = LyricBackgroundStore.save(data) {
-                    lyricBackgroundImagePath = path
-                    BeansHaptics.success()
-                    ToastCenter.shared.show("歌词背景已应用")
-                } else {
-                    ToastCenter.shared.show("歌词背景保存失败")
-                }
-            }
+            WallpaperPhotoPicker(
+                onPicked: { data in
+                    if let path = LyricBackgroundStore.save(data) {
+                        lyricBackgroundImagePath = path
+                        BeansHaptics.success()
+                        ToastCenter.shared.show("歌词背景已应用")
+                    } else {
+                        ToastCenter.shared.show("歌词背景保存失败")
+                    }
+                },
+                onFinish: { showLyricBackgroundPicker = false }
+            )
             .ignoresSafeArea()
         }
         .onAppear {
