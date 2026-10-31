@@ -9,19 +9,19 @@ import UIKit
 ///
 /// 为什么不是固定色值：主题色是用户可选的（默认 #FB7299，还有八档），
 /// 写死一档红只能救一种主题色。
-enum AppThemeContrastTokens {
+public enum AppThemeContrastTokens {
     /// 目标对比度 4.65：比 4.5 的门槛留 0.15 余量，屏幕取整和色偏都吃不掉它。
-    static let minimumRatio: CGFloat = 4.65
+    public static let minimumRatio: CGFloat = 4.65
 
     /// 品牌色当实底、上面配白字时的填充色。
-    static func filledBackground(from accent: Color) -> Color {
+    public static func filledBackground(from accent: Color) -> Color {
         let base = components(of: accent)
         let adjusted = adjust(base, toward: .black, reaching: minimumRatio, against: .white)
         return color(of: adjusted)
     }
 
     /// 「已关注」这类描边胶囊：字色要压在胶囊底色上，浅色压深、深色提亮。
-    static func legibleText(from accent: Color, on surface: Color, isDark: Bool) -> Color {
+    public static func legibleText(from accent: Color, on surface: Color, isDark: Bool) -> Color {
         let base = components(of: accent)
         let surfaceComponents = components(of: surface)
         let adjusted = adjust(
@@ -33,8 +33,18 @@ enum AppThemeContrastTokens {
         return color(of: adjusted)
     }
 
+    /// 半透明固定底压在最不利的壁纸上之后的效果色：浅色模式按压在黑壁纸上算，
+    /// 深色模式按压在白壁纸上算。底板只遮一部分，字色不按这一档反算，
+    /// 真壁纸一换就会掉到线下（实测浅色从 4.65 掉到 3.7）。
+    public static func worstCaseSurface(for surface: Color, isDark: Bool) -> Color {
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 1
+        UIColor(surface).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        let backdrop: RGB = isDark ? .white : .black
+        return color(of: mix(backdrop, components(of: surface), alpha))
+    }
+
     /// 描边胶囊的底色预估：主题色按 12% 混到底色上。
-    static func borderedCapsuleBackground(from accent: Color, isDark: Bool) -> Color {
+    public static func borderedCapsuleBackground(from accent: Color, isDark: Bool) -> Color {
         let accentComponents = components(of: accent)
         let baseComponents: RGB = isDark
             ? RGB(red: 0x20 / 255, green: 0x20 / 255, blue: 0x20 / 255)

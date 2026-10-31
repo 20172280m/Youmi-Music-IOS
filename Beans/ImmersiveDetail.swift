@@ -1,3 +1,4 @@
+import CiliCiliKit
 import CoreImage
 import SwiftUI
 import UIKit
@@ -23,6 +24,9 @@ struct BeansImmersiveDetailHeader: View {
     var onPlayAll: (() -> Void)?
     /// 播放全部一律用主题色；封面取色只给渐变底和阴影，不进按钮。
     var playAllTint: Color?
+    /// 文字后面没有渐变兜底、直接压着壁纸时（歌手主页），给副信息垫一层固定底。
+    /// 壁纸颜色不可控，注释色又是用户可选的，只能把「字压在哪」定下来。nil = 不垫。
+    var textBackdrop: Color?
     /// 封面取色回传：顶部底材要和头部顶沿同一个颜色，不能一白一棕硬接。
     var onPalette: ((Color) -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -59,7 +63,17 @@ struct BeansImmersiveDetailHeader: View {
                     .accessibilityIdentifier("beans.immersive.subtitle")
             }
             if !metadata.isEmpty {
-                Text(metadata).font(BeansFont.appFont(12)).foregroundStyle(Color.beansComment)
+                Text(metadata).font(BeansFont.appFont(12)).foregroundStyle(metadataColor)
+                    // 底板用负内边距向外撑：加在外面的 padding 会把头部撑高，
+                    // 而歌手页那一块空白是按 317/344 写死的，涨 1 点就会顶到搜索框。
+                    .background {
+                        if let textBackdrop {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(textBackdrop)
+                                .padding(.horizontal, -8)
+                                .padding(.vertical, -3)
+                        }
+                    }
                     .opacity(Double(max(0, 1 - collapseProgress / 0.3)))
                     // 名字和副信息是一组：这里用 6 点，别的段位保持组件的 16。
                     .padding(.top, -10)
@@ -73,7 +87,10 @@ struct BeansImmersiveDetailHeader: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background((playAllTint ?? palette).opacity(0.9), in: Capsule())
+                    // 白字压实底：填充按 4.65 反算，不再乘 0.9 透明度
+                    //（那一层会透出下面的渐变，白字实测只剩 3.4:1）。
+                    .background(AppThemeContrastTokens.filledBackground(from: playAllTint ?? palette),
+                                in: Capsule())
                     .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
@@ -118,6 +135,17 @@ struct BeansImmersiveDetailHeader: View {
         let luminance = 0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
         guard colorScheme == .dark else { return luminance > 0.7 ? 0.38 : 0.30 }
         return luminance > 0.7 ? 0.30 : 0.26
+    }
+
+    /// 副信息字色：有固定底时按 4.65 对底板派生（保留用户自选的注释色相），
+    /// 没有底板时维持原来的次要色。
+    private var metadataColor: Color {
+        guard let textBackdrop else { return Color.beansComment }
+        return AppThemeContrastTokens.legibleText(
+            from: Color.beansComment,
+            on: AppThemeContrastTokens.worstCaseSurface(for: textBackdrop, isDark: colorScheme == .dark),
+            isDark: colorScheme == .dark
+        )
     }
 
     private var gradientTopOpacity: Double {

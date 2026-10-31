@@ -84,6 +84,14 @@ struct ArtistHomeSheet: View {
     /// 头部自然高度：只量一次。头部自己的尺寸不依赖这个值（只有叠层裁剪带和空白块用它），
     /// 所以量→写回→再量不会成环。
     @Environment(\.colorScheme) private var colorScheme
+
+    /// 歌手页顶部整块是用户壁纸，文字后面没有渐变兜底：副信息垫一层固定底。
+    /// 0.9 不透明仍然透出一点壁纸，但底板亮度不再随壁纸摆。
+    private var headerTextBackdrop: Color {
+        colorScheme == .dark
+            ? Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.9)
+            : Color.white.opacity(0.9)
+    }
     @State private var bandTint: Color?
     /// 本页自己算的封面取色：页面底渐变和头部共用这一个值，不靠头部异步回传。
     @State private var pagePalette: Color?
@@ -405,6 +413,7 @@ struct ArtistHomeSheet: View {
                                           player.play(songs: displayedHotSongs, startAt: 0)
                                       },
                                       playAllTint: theme.accent.highlight,
+                                      textBackdrop: headerTextBackdrop,
                                       onPalette: { tint in
                                           // 只在真的换了颜色时才写状态：头部每次重排都可能重跑取色，
                                           // 无条件写会把“写状态→重排→再取色”接成环。
