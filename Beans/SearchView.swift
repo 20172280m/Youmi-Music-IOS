@@ -478,7 +478,7 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .beansScrollIndicatorsHidden()
-            .beansScrollDismissesKeyboard()
+            .beansScrollDismissesKeyboardImmediately()
         }
     }
 
@@ -504,7 +504,7 @@ struct SearchView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .beansScrollIndicatorsHidden()
-                .beansScrollDismissesKeyboard()
+                .beansScrollDismissesKeyboardImmediately()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
@@ -662,6 +662,7 @@ struct SearchView: View {
                     Button {
                         guard resultType != type else { return }
                         BeansHaptics.tap()
+                        searchController.dismissKeyboard()
                         resultType = type
                     } label: {
                         Text(LocalizedStringKey(type.rawValue))
@@ -1257,6 +1258,7 @@ struct SearchView: View {
         debounceTask?.cancel()
         let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        searchController.dismissKeyboard()
         historyStore.record(trimmed)
         Task {
             if resultType == .playlist {
