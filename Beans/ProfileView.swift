@@ -2584,17 +2584,27 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var utilitySettingsGroup: some View {
-        if showBackupSettings || showChangelogSettings || showSupportSettings {
+        if showBackupSettings || showChangelogSettings {
             SettingsCatalogGroup {
                 if showBackupSettings {
                     backupSection
                     catalogDivider
                     BeansCacheSettingsSection()
                 }
-                if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
+                if showBackupSettings && showChangelogSettings { catalogDivider }
                 if showChangelogSettings { changelogSection }
-                if showChangelogSettings && showSupportSettings { catalogDivider }
-                if showSupportSettings { settingsSupportSection }
+            }
+        }
+        // 「关于与支持」是卡片外的分组标题（Colo 定的档：左缩进比卡片多 16、13pt 半粗、次要色、
+        // 到卡片 6）。为把它放对位置，「支持」这五项从原来那张卡拆成独立一张，行序不动。
+        if showSupportSettings {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("关于与支持")
+                    .font(BeansFont.appFont(13, .semibold))
+                    .foregroundStyle(Color.beansComment)
+                    .padding(.leading, 16)
+                    .accessibilityAddTraits(.isHeader)
+                SettingsCatalogGroup { settingsSupportSection }
             }
         }
     }

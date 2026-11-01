@@ -2,6 +2,12 @@ import SwiftUI
 
 /// Functional reconstruction: cache controls share the existing settings card;
 /// backups retain their own controls. This does not claim the original UI layout.
+///
+/// 动词口径（照原版 2.0.3，机器码里读到的文案）：
+/// 缓存这一页一律用「清理」——刷新缓存统计、清理全部缓存、清理、
+/// 分类缓存清理失败、缓存统计失败、清理后统计失败。原版本地化表里
+/// 字体与背景用的是「清除」（清除专属字体、清除当前背景），两种动词并存
+/// 是原版自己的写法，不是笔误：不要合并，也不要做成全局替换。
 @MainActor
 struct BeansCacheSettingsSection: View {
     @StateObject private var manager = BeansCacheManager()
