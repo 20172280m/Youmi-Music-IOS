@@ -11,6 +11,8 @@ final class BeansDiagnostics: ObservableObject {
     static let shared = BeansDiagnostics()
 
     @Published private(set) var breadcrumbCount = 0
+    /// 诊断页「最近操作」列表的数据源：由同一条已落盘的日志行解析得到，不新增采集。
+    @Published private(set) var recentEntries: [BeansDiagnosticEntry] = []
     @Published private(set) var lastRoute = "启动"
     @Published private(set) var lastSnapshotDate: Date?
     @Published private(set) var lastCrashFile: URL?
@@ -27,6 +29,7 @@ final class BeansDiagnostics: ObservableObject {
     private var performanceTimer: DispatchSourceTimer?
     private var mainBeat = Date()
     private let maxBreadcrumbs = 80
+    private let maxEntries = 80
 
     private init() {
         enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
@@ -107,6 +110,7 @@ final class BeansDiagnostics: ObservableObject {
         lock.unlock()
         lastCrashFile = nil
         breadcrumbCount = 0
+        recentEntries = []
     }
 
     func record(_ message: String, level: BeansLogLevel = .debug, file: String = #fileID, line: Int = #line, function: String = #function) {
@@ -120,6 +124,15 @@ final class BeansDiagnostics: ObservableObject {
         UserDefaults.standard.set(recent, forKey: "beans.diagnostics.breadcrumbs")
         lock.unlock()
         breadcrumbCount = recent.count
+        if let entry = BeansDiagnosticEntry(line: lineText) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                var entries = self.recentEntries
+                entries.append(entry)
+                if entries.count > self.maxEntries { entries.removeFirst(entries.count - self.maxEntries) }
+                self.recentEntries = entries
+            }
+        }
         BeansLogger.shared.log(lineText, level: level)
     }
 
@@ -198,11 +211,123 @@ final class BeansDiagnostics: ObservableObject {
     }
 }
 
+/// 诊断页列表里的一行。内容全部来自已经写下的日志行，只做字段拆分，不改采集。
+struct BeansDiagnosticEntry: Identifiable, Equatable {
+    enum Category: String, CaseIterable, Identifiable {
+        case page, tap, network, error
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .page: return "页面进入"
+            case .tap: return "点击"
+            case .network: return "网络"
+            case .error: return "异常"
+            }
+        }
+    }
+
+    let id = UUID()
+    let date: Date
+    let category: Category
+    let content: String
+    let position: String?
+
+    init?(line: String) {
+        guard let contentRange = line.range(of: " content=", options: .backwards) else { return nil }
+        let content = String(line[contentRange.upperBound...])
+        guard let category = Self.category(for: content) else { return nil }
+        let head = String(line[..<contentRange.lowerBound])
+        guard let tsRange = head.range(of: "ts=") else { return nil }
+        let stamp = String(head[tsRange.upperBound...].prefix { $0 != " " })
+        guard let date = Self.parseTimestamp(stamp) else { return nil }
+        self.date = date
+        self.category = category
+        self.content = content
+        self.position = Self.position(in: head)
+    }
+
+    init(date: Date, category: Category, content: String, position: String? = nil) {
+        self.date = date
+        self.category = category
+        self.content = content
+        self.position = position
+    }
+
+    /// 性能采样、手动快照这类没有交互语义的记录不进列表，仍然留在导出日志里。
+    static func category(for content: String) -> Category? {
+        if content.hasPrefix("route=") { return .page }
+        if content.hasPrefix("action=") { return .tap }
+        if content.hasPrefix("network ") { return .network }
+        if content.hasPrefix("error=") { return .error }
+        return nil
+    }
+
+    static func parseTimestamp(_ text: String) -> Date? {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: text) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: text)
+    }
+
+    /// 文件位置这类技术字段只在详情里露一行，叫「位置」。
+    static func position(in head: String) -> String? {
+        guard let fileRange = head.range(of: " file="),
+              let functionRange = head.range(of: " function=", options: .backwards),
+              fileRange.upperBound <= functionRange.lowerBound else { return nil }
+        let file = String(head[fileRange.upperBound..<functionRange.lowerBound]).trimmingCharacters(in: .whitespaces)
+        let function = String(head[functionRange.upperBound...]).trimmingCharacters(in: .whitespaces)
+        let name = function.split(separator: "(").first.map(String.init) ?? function
+        guard !file.isEmpty else { return nil }
+        return name.isEmpty ? file : "\(file) · \(name)"
+    }
+}
+
+/// 列表顶部的分段筛选，顺序：全部、页面进入、点击、网络、异常。
+enum BeansDiagnosticFilter: String, CaseIterable, Identifiable {
+    case all, page, tap, network, error
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .page: return "页面进入"
+        case .tap: return "点击"
+        case .network: return "网络"
+        case .error: return "异常"
+        }
+    }
+
+    var category: BeansDiagnosticEntry.Category? {
+        switch self {
+        case .all: return nil
+        case .page: return .page
+        case .tap: return .tap
+        case .network: return .network
+        case .error: return .error
+        }
+    }
+
+    func matches(_ entry: BeansDiagnosticEntry) -> Bool {
+        guard let category else { return true }
+        return entry.category == category
+    }
+}
+
 struct BeansDiagnosticsSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var diagnostics = BeansDiagnostics.shared
     @State private var showShare = false
     @State private var showClearConfirm = false
+    @State private var logFilter: BeansDiagnosticFilter = .all
+
+    private var recentEntryCount: Int {
+        diagnostics.recentEntries.filter(logFilter.matches).count
+    }
 
     var body: some View {
         BeansNavigationStack {
@@ -218,7 +343,22 @@ struct BeansDiagnosticsSettingsView: View {
                             .font(BeansFont.appFont(12))
                             .foregroundStyle(Color.beansComment)
                         diagnosticRow("构建", value: BeansBuildStamp.text)
-                        diagnosticRow("最近操作", value: "\(diagnostics.breadcrumbCount) 条")
+                        NavigationLink {
+                            BeansDiagnosticsLogView(filter: $logFilter)
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text("最近操作").foregroundStyle(Color.beansComment)
+                                Spacer()
+                                Text("\(recentEntryCount) 条").foregroundStyle(Color.beansLabel)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment)
+                            }
+                            .font(BeansFont.appFont(12))
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("diagnostics-recent")
                         diagnosticRow("当前页面", value: diagnostics.lastRoute)
                         diagnosticRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
                         HStack(spacing: 10) {
@@ -272,3 +412,165 @@ struct BeansDiagnosticsSettingsView: View {
     }
 }
 
+
+/// 最近操作列表：只展示已经记下的记录，不加新采集、不碰网络层。
+struct BeansDiagnosticsLogView: View {
+    @ObservedObject private var diagnostics = BeansDiagnostics.shared
+    @Binding var filter: BeansDiagnosticFilter
+
+    private var entries: [BeansDiagnosticEntry] {
+        diagnostics.recentEntries.filter(filter.matches)
+    }
+
+    private static let rowTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("筛选", selection: $filter) {
+                    ForEach(BeansDiagnosticFilter.allCases) { item in
+                        Text(item.title).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("diagnostics-filter")
+
+                Text("\(entries.count) 条")
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("diagnostics-count")
+
+                if entries.isEmpty {
+                    Text(diagnostics.recentEntries.isEmpty
+                         ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
+                         : "这一类还没有记录。")
+                        .font(BeansFont.appFont(13))
+                        .foregroundStyle(Color.beansComment)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 8)
+                        .accessibilityIdentifier("diagnostics-empty")
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                            row(entry)
+                            if index != entries.count - 1 {
+                                Divider().opacity(0.35)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .background {
+                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .navigationTitle("最近操作")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func row(_ entry: BeansDiagnosticEntry) -> some View {
+        NavigationLink {
+            BeansDiagnosticDetailView(entry: entry)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(Self.rowTimeFormatter.string(from: entry.date))
+                    .font(BeansFont.appFont(12))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.beansComment)
+                Text(entry.category.title)
+                    .font(BeansFont.appFont(12, .semibold))
+                    .foregroundStyle(Color.beansLabel)
+                Text(summary(entry.content))
+                    .font(BeansFont.appFont(12))
+                    .foregroundStyle(Color.beansComment)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 类型已经在上一列，摘要里就不重复那个前缀了。
+    private func summary(_ content: String) -> String {
+        var text = content
+        if text.hasPrefix("route=") { text.removeFirst("route=".count) }
+        else if text.hasPrefix("action=") { text.removeFirst("action=".count) }
+        else if text.hasPrefix("error=") { text.removeFirst("error=".count) }
+        else if text.hasPrefix("network ") { text.removeFirst("network ".count) }
+        return text
+    }
+}
+
+/// 一条记录的详情：时间、类型、内容，技术位置放最后。
+struct BeansDiagnosticDetailView: View {
+    let entry: BeansDiagnosticEntry
+
+    private static let detailTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
+
+    private var timeText: String {
+        Self.detailTimeFormatter.string(from: entry.date)
+    }
+
+    private var copyText: String {
+        var lines = ["时间：\(timeText)", "类型：\(entry.category.title)", "内容：\(entry.content)"]
+        if let position = entry.position { lines.append("位置：\(position)") }
+        return lines.joined(separator: "\n")
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                field("时间", timeText)
+                field("类型", entry.category.title)
+                field("内容", entry.content)
+                if let position = entry.position {
+                    field("位置", position)
+                }
+            }
+            .padding(16)
+            .background {
+                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .padding(16)
+        }
+        .navigationTitle("记录详情")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("复制") {
+                    UIPasteboard.general.string = copyText
+                    ToastCenter.shared.show("已复制")
+                }
+            }
+        }
+    }
+
+    private func field(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(BeansFont.appFont(12))
+                .foregroundStyle(Color.beansComment)
+            Text(value)
+                .font(BeansFont.appFont(13))
+                .foregroundStyle(Color.beansLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
