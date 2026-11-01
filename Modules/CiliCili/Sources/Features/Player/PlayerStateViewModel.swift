@@ -3998,8 +3998,10 @@ final class PlayerStateViewModel: NSObject, ObservableObject {
     private var isAtPlaybackEnd: Bool {
         if playbackPhase == .ended { return true }
         let snapshot = engine.snapshot(durationHint: durationHint)
-        let effectiveDuration = snapshot.duration ?? duration
-        guard effectiveDuration.isFinite, effectiveDuration > 0.5 else { return false }
+        guard let effectiveDuration = snapshot.duration ?? duration,
+              effectiveDuration.isFinite,
+              effectiveDuration > 0.5
+        else { return false }
         let time = snapshot.currentTime ?? currentTime
         return time.isFinite && time >= effectiveDuration - 0.5
     }
