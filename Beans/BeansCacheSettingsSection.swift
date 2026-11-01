@@ -74,11 +74,11 @@ struct BeansCacheSettingsSection: View {
             if !Task.isCancelled { didRefresh = true }
         }
         .confirmationDialog(
-            Text("清除「\(selectionTitle)」？"),
+            Text("清理「\(selectionTitle)」？"),
             isPresented: $showConfirmation,
             titleVisibility: .visible
         ) {
-            Button("确认清除", role: .destructive) {
+            Button("确认清理", role: .destructive) {
                 let selection = pendingCategories
                 pendingCategories = []
                 guard !selection.isEmpty else { return }
@@ -97,7 +97,7 @@ struct BeansCacheSettingsSection: View {
                 Button {
                     begin(.refresh)
                 } label: {
-                    Label("刷新统计", systemImage: "arrow.clockwise")
+                    Label("刷新缓存统计", systemImage: "arrow.clockwise")
                         .font(BeansFont.appFont(13, .semibold))
                         .frame(minHeight: 44)
                 }
@@ -106,7 +106,7 @@ struct BeansCacheSettingsSection: View {
                 Button(role: .destructive) {
                     confirm(BeansCacheCategory.allCases)
                 } label: {
-                    Text("清除全部缓存")
+                    Text("清理全部缓存")
                         .font(BeansFont.appFont(13, .semibold))
                         .frame(minHeight: 44)
                 }
@@ -195,14 +195,14 @@ struct BeansCacheSettingsSection: View {
             Button(role: .destructive) {
                 confirm([category])
             } label: {
-                Text("清除")
+                Text("清理")
                     .font(BeansFont.appFont(13, .semibold))
                     .frame(minWidth: 44, minHeight: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(busy || usage == nil)
-            .accessibilityLabel(Text("清除\(categoryTitle(category))"))
+            .accessibilityLabel(Text("清理\(categoryTitle(category))"))
             .accessibilityIdentifier("cache-clear-\(category.rawValue)")
         }
         .padding(.vertical, 12)

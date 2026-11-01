@@ -68,24 +68,24 @@ final class BeansCacheManager: ObservableObject {
                 if let note = try await operations.clear(category) { notes.append(note) }
                 else { cleared += 1 }
             } catch {
-                notes.append("\(localizedTitle(category))：\(beansLocalized("清理失败", "Clear failed")) — \(error.localizedDescription)")
+                notes.append("\(localizedTitle(category))：\(beansLocalized("分类缓存清理失败", "Category cache clear failed")) — \(error.localizedDescription)")
             }
         }
         // Refresh directly, not through the public working guard, and never erase clear failures.
-        notes += await collectUsage()
+        notes += await collectUsage(failureHeadline: beansLocalized("清理后统计失败", "Measurement failed after clearing"))
         if notes.isEmpty, cleared > 0 {
             notes.append(beansLocalized("所选缓存已清理；使用时可能重新生成。", "Selected caches cleared; they may be regenerated during use."))
         }
         message = notes.isEmpty ? nil : notes.joined(separator: "\n")
     }
 
-    private func collectUsage() async -> [String] {
+    private func collectUsage(failureHeadline: String = beansLocalized("缓存统计失败", "Cache measurement failed")) async -> [String] {
         var measured: [BeansCacheUsage] = []
         var failures: [String] = []
         for category in BeansCacheCategory.allCases {
             if Task.isCancelled { break }
             do { measured.append(try await operations.measure(category)) }
-            catch { failures.append("\(localizedTitle(category))：\(beansLocalized("统计失败", "Measurement failed")) — \(error.localizedDescription)") }
+            catch { failures.append("\(localizedTitle(category))：\(failureHeadline) — \(error.localizedDescription)") }
         }
         // Failed measurements are absent/unknown, never silently replaced by zero or stale numbers.
         usage = measured
