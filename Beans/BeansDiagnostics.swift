@@ -119,9 +119,12 @@ final class BeansDiagnostics: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "beans.diagnostics.breadcrumbs")
         UserDefaults.standard.removeObject(forKey: "beans.crash.recentEvents")
         lock.unlock()
-        lastCrashFile = nil
-        breadcrumbCount = 0
-        recentEntries = []
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.lastCrashFile = nil
+            self.breadcrumbCount = 0
+            self.recentEntries = []
+        }
     }
 
     func record(_ message: String, level: BeansLogLevel = .debug, file: String = #fileID, line: Int = #line, function: String = #function) {
@@ -134,7 +137,9 @@ final class BeansDiagnostics: ObservableObject {
         let recent = breadcrumbs
         UserDefaults.standard.set(recent, forKey: "beans.diagnostics.breadcrumbs")
         lock.unlock()
-        breadcrumbCount = recent.count
+        // 这两个值驱动 SwiftUI（计数、列表），只能回主线程写；record() 会被网络层、
+        // 缓存队列这类后台上下文调到，直接写会把界面状态从后台线程发出去。
+        DispatchQueue.main.async { [weak self] in self?.breadcrumbCount = recent.count }
         if let entry = BeansDiagnosticEntry(line: lineText) {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
