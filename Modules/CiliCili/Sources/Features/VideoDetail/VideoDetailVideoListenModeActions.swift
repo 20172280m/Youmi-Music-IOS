@@ -180,7 +180,11 @@ extension VideoDetailViewModel {
         }
 
         let resumeTime = currentPlaybackResumeTime()
+        // 刚从 UP 主页这类入口进来时播放器一次都没起播过，此时用户主动切听视频
+        // 就是「现在开始听」，不能继承一个「从没播过」的意图，否则停在 0%。
+        // 已经播过又主动暂停的，继续尊重暂停，不抢着播。
         let shouldResumePlayback = currentPlaybackIntent()
+            || (isEnabled && stablePlayerViewModel?.hasPresentedPlayback != true)
         let playbackRate = stablePlayerViewModel?.playbackRate ?? .x10
         cancelHLSRenditionPrebuildTask()
         cancelSeekWarmups()
