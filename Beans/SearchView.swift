@@ -1104,6 +1104,7 @@ struct SearchView: View {
                                 .layoutPriority(1)
                             Button {
                                 BeansHaptics.tap()
+                                searchController.dismissKeyboard()
                                 player.play(songs: songResults, startAt: 0)
                             } label: {
                                 Label("播放全部", systemImage: "play.fill")
@@ -1138,6 +1139,8 @@ struct SearchView: View {
                                 song: song,
                                 onTap: {
                                     BeansHaptics.tap()
+                                    // 键盘盖着迷你播放器，点了歌看不到反应；先收键盘再播。
+                                    searchController.dismissKeyboard()
                                     player.play(songs: songResults, startAt: index)
                                 },
                                 onPlayNext: {
