@@ -547,6 +547,7 @@ private struct VideoDetailInteractivePlayerLayer: View {
     let onToggleDanmaku: () -> Void
     let onShowDanmakuSettings: () -> Void
     let onNavigateBack: () -> Void
+    @State private var isListenQueuePresented = false
 
     var body: some View {
         let layout = model.layout(
@@ -598,6 +599,17 @@ private struct VideoDetailInteractivePlayerLayer: View {
                     .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
                     .zIndex(3)
                 }
+            } else if viewModel.playbackContentMode == .audioOnly {
+                // 听视频模式把画面交给外部播放器，详情页不建播放器画面，这块就会留白。
+                // 用和播放器同一套封面图层占位：尺寸沿用视频区，标题/UP 信息不被顶下去。
+                VideoDetailListenArtworkPanel(
+                    viewModel: viewModel,
+                    size: layout.playerFrame.size,
+                    isListenQueuePresented: $isListenQueuePresented
+                )
+                .frame(width: layout.playerFrame.width, height: layout.playerFrame.height)
+                .position(x: layout.playerFrame.midX, y: layout.playerFrame.midY)
+                .zIndex(2)
             }
             // 没有播放器画面时的出口挂在容器最外层，不再塞在播放器框里：
             // 播放器框在没出画时会缩到很矮，按钮画在框外就看得到、点不到（Ato 按下无反应的那次）。
@@ -606,6 +618,16 @@ private struct VideoDetailInteractivePlayerLayer: View {
             .onChange(of: layout) { _, newLayout in
                 guard newLayout.playerFrame != model.playerFrame else { return }
                 model.scheduleLayoutSynchronization(newLayout)
+            }
+            .sheet(isPresented: $isListenQueuePresented) {
+                NavigationStack {
+                    SurfaceOnlyVideoListenQueuePage(
+                        detailViewModel: viewModel,
+                        closeSheet: { isListenQueuePresented = false }
+                    )
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
     }
 }

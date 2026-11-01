@@ -1314,7 +1314,7 @@ private struct SurfaceOnlyVideoListenQuickControls: View {
     }
 }
 
-private struct VideoListenArtworkLayer: View {
+struct VideoListenArtworkLayer: View {
     let video: VideoItem
     let isLandscape: Bool
 
@@ -2700,7 +2700,7 @@ private struct SurfaceOnlyAudioChoicesPage: View {
     }
 }
 
-private struct SurfaceOnlyVideoListenQueuePage: View {
+struct SurfaceOnlyVideoListenQueuePage: View {
     @ObservedObject var detailViewModel: VideoDetailViewModel
     let closeSheet: () -> Void
 
