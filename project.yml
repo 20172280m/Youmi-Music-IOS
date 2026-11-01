@@ -33,7 +33,7 @@ targets:
         SWIFT_COMPILATION_MODE: wholemodule
         SWIFT_OPTIMIZATION_LEVEL: "-O"
         MARKETING_VERSION: "2.0.3"
-        CURRENT_PROJECT_VERSION: "2"
+        CURRENT_PROJECT_VERSION: "3"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -87,7 +87,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.beans.app.liveactivity
         MARKETING_VERSION: "2.0.3"
-        CURRENT_PROJECT_VERSION: "2"
+        CURRENT_PROJECT_VERSION: "3"
         SKIP_INSTALL: YES
         APPLICATION_EXTENSION_API_ONLY: YES
     info:
