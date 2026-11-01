@@ -731,7 +731,7 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                             guard !viewModel.isTerminated else { return }
                             viewModel.togglePlayback()
                         },
-                        onShowMoreControls: openMoreControls,
+                        onShowMoreControls: openMoreControlsFromAccessibility,
                         onToggleFullscreen: {
                             if isLandscape || isPortraitFullscreen {
                                 onExitFullscreen()
@@ -1017,6 +1017,19 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                 guard portraitMoreControlsRequestID == requestID else { return }
                 portraitMoreControlsRequestID = nil
             }
+        }
+    }
+
+    /// 隐藏态读屏入口：不占用 portraitMoreControlsRequestID，
+    /// 否则控件会一直处于「二级面板展示中」而无法自动隐藏。
+    private func openMoreControlsFromAccessibility() {
+        playbackControlsVisibility.cancelAutoHide()
+        if isLandscape {
+            withAnimation(.default) {
+                isMoreControlsPresented = true
+            }
+        } else {
+            onShowMoreControls {}
         }
     }
 

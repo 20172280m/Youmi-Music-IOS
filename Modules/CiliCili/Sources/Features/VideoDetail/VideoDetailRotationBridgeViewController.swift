@@ -132,7 +132,6 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        VideoDetailDebugProbe.record("bridgeWillDisappear")
         isViewActive = false
         contentController.dismissPlayerMoreControls()
         recoverInterruptedRotationIfNeeded(reason: "viewWillDisappear")
@@ -180,7 +179,6 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         rotationGeneration += 1
         let generation = rotationGeneration
         cancelRotationTasks()
-        VideoDetailDebugProbe.record("viewWillTransition toLandscape=\(toLandscape) size=\(Int(size.width))x\(Int(size.height))")
         rotationCoordinator.beginSystemTransition(toLandscape: toLandscape)
         contentController.beginSystemRotation(toLandscape: toLandscape)
         contentController.markRotationStarted(toLandscape: toLandscape)
@@ -220,7 +218,6 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
             updateOrientationLock()
             setNeedsStatusBarAppearanceUpdate()
             setNeedsUpdateOfHomeIndicatorAutoHidden()
-            VideoDetailDebugProbe.record("reqFS portraitVideo")
             return
         }
         let scene = resolvedWindowScene
@@ -229,10 +226,7 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
             currentInterfaceOrientation: scene?.effectiveGeometry.interfaceOrientation,
             deviceOrientation: UIDevice.current.orientation
         )
-        let submitted = rotationCoordinator.requestGeometryUpdate(to: target, in: scene)
-        VideoDetailDebugProbe.record(
-            "reqFS scene=\(scene != nil) state=\(scene?.activationState.rawValue ?? -1) orient=\(scene?.effectiveGeometry.interfaceOrientation.rawValue ?? -1) mask=\(target.rawValue) supported=\(AppOrientationLock.supportedOrientations.rawValue) submitted=\(submitted)"
-        )
+        rotationCoordinator.requestGeometryUpdate(to: target, in: scene)
         scheduleFullscreenFallback(generation: generation)
     }
 
@@ -256,9 +250,6 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
             self.setNeedsStatusBarAppearanceUpdate()
             self.setNeedsUpdateOfHomeIndicatorAutoHidden()
             self.contentController.recoverStableLayout()
-            VideoDetailDebugProbe.record(
-                "fsFallback portraitFullscreen geomErr=\(AppOrientationLock.lastGeometryUpdateError ?? "nil")"
-            )
         }
     }
 
@@ -272,13 +263,11 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
             updateOrientationLock()
             setNeedsStatusBarAppearanceUpdate()
             setNeedsUpdateOfHomeIndicatorAutoHidden()
-            VideoDetailDebugProbe.record("reqExitFS portrait")
             return
         }
         let scene = resolvedWindowScene
         rotationCoordinator.allowLandscape(in: scene)
-        let submitted = rotationCoordinator.requestGeometryUpdate(to: .portrait, in: scene)
-        VideoDetailDebugProbe.record("reqExitFS submitted=\(submitted) scene=\(scene != nil)")
+        rotationCoordinator.requestGeometryUpdate(to: .portrait, in: scene)
     }
 
     private func handleBackButton() {

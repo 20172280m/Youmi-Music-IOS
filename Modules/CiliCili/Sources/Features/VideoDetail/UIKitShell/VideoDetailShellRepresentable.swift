@@ -36,7 +36,6 @@ struct VideoDetailShellRepresentable: UIViewControllerRepresentable {
             onOpenCommentComposer: onOpenCommentComposer,
             onShowDanmakuSettings: { isShowingDanmakuSettings = true },
             onPresentPlayerMoreControls: { playerViewModel, onDismiss in
-                VideoDetailDebugProbe.record("routeIn=\(sheetRoute == nil ? "nil" : "busy")")
                 guard sheetRoute == nil else {
                     onDismiss()
                     return
@@ -47,7 +46,6 @@ struct VideoDetailShellRepresentable: UIViewControllerRepresentable {
                         onDismiss: onDismiss
                     )
                 )
-                VideoDetailDebugProbe.record("routeSet=\(sheetRoute != nil)")
             },
             onDismissPlayerMoreControls: {
                 guard case .some(.moreControls(let presentation)) = sheetRoute else { return }

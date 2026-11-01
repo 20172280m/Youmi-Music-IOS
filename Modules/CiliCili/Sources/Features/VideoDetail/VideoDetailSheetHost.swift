@@ -58,8 +58,6 @@ private struct VideoDetailSheetHostModifier: ViewModifier {
                                 onToggleDanmaku: { viewModel.toggleDanmaku() },
                                 close: { sheetRouteBinding.wrappedValue = nil }
                             )
-                            .onAppear { VideoDetailDebugProbe.record("moreSheetAppear") }
-                            .onDisappear { VideoDetailDebugProbe.record("moreSheetDisappear") }
                         }
                     }
             }

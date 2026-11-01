@@ -3,8 +3,6 @@ import UIKit
 @MainActor
 enum AppOrientationLock {
     private(set) static var supportedOrientations: UIInterfaceOrientationMask = .portrait
-    /// 临时取证：最近一次几何请求的系统错误，最终提交前删除。
-    private(set) static var lastGeometryUpdateError: String?
 
     static func update(
         to orientations: UIInterfaceOrientationMask,
@@ -67,18 +65,7 @@ enum AppOrientationLock {
         scenes.forEach { scene in
             scene.requestGeometryUpdate(
                 UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: orientations)
-            ) { error in
-                let nsError = error as NSError
-                let errorText = "\(nsError.localizedDescription) [\(nsError.code)]"
-                let sceneState = scene.activationState.rawValue
-                let mask = orientations.rawValue
-                Task { @MainActor in
-                    AppOrientationLock.lastGeometryUpdateError = errorText
-                    VideoDetailDebugProbe.record(
-                        "geom mask=\(mask) scene=\(sceneState) err=\(errorText)"
-                    )
-                }
-            }
+            ) { _ in }
         }
     }
 }
