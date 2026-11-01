@@ -262,6 +262,14 @@ enum VideoListenQueuePaginationDirection: String, Sendable {
     case next
 }
 
+/// 入口列表本身没有游标（`entryList` 只是一段快照）。
+/// 到队尾后必须显式续页：UP 主投稿按页追加，追不到或追完了再退回相关推荐。
+enum VideoListenQueueContinuation: Equatable, Sendable {
+    case uploader(mid: Int, order: UploaderVideoOrder, anchored: Bool)
+    case related
+    case exhausted
+}
+
 struct VideoListenQueueSession: Equatable {
     var source: VideoListenQueueSource
     var videos: [VideoItem]
@@ -270,6 +278,7 @@ struct VideoListenQueueSession: Equatable {
     var listenerPreviousToken: String?
     var listenerNextToken: String?
     var hasMore: Bool
+    var continuation: VideoListenQueueContinuation
     var isLoadingInitial: Bool
     var isLoadingMore: Bool
     var errorMessage: String?
@@ -283,6 +292,7 @@ struct VideoListenQueueSession: Equatable {
         listenerPreviousToken = nil
         listenerNextToken = nil
         hasMore = false
+        continuation = .exhausted
         isLoadingInitial = false
         isLoadingMore = false
         errorMessage = nil
@@ -290,9 +300,21 @@ struct VideoListenQueueSession: Equatable {
     }
 
     mutating func installEntryContext(_ context: VideoEntryContext, anchor: VideoItem) {
+        let continuation: VideoListenQueueContinuation
+        switch context.continuation {
+        case .uploader(let mid, let order):
+            continuation = mid > 0 ? .uploader(mid: mid, order: order, anchored: false) : .related
+        case .related:
+            continuation = .related
+        case nil:
+            // 搜索、收藏等已经完整取回的列表不擅自补别的维度。
+            continuation = .exhausted
+        }
         let generation = beginInitialLoad(source: .entryList(title: context.title), anchor: anchor)
+        let hasContinuation = continuation != .exhausted && !anchor.bvid.isEmpty
         finishInitialLoad(videos: context.videos, anchor: anchor, source: .entryList(title: context.title),
-                          nextPage: 1, nextCursor: nil, hasMore: false, generation: generation)
+                          nextPage: 0, nextCursor: nil, hasMore: hasContinuation, generation: generation)
+        self.continuation = hasContinuation ? continuation : .exhausted
     }
 
     mutating func beginInitialLoad(
@@ -307,6 +329,7 @@ struct VideoListenQueueSession: Equatable {
         listenerPreviousToken = nil
         listenerNextToken = nil
         hasMore = false
+        continuation = .exhausted
         isLoadingInitial = true
         isLoadingMore = false
         errorMessage = nil

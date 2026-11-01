@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-enum UploaderVideoOrder: String, CaseIterable, Identifiable, Sendable {
+enum UploaderVideoOrder: String, CaseIterable, Identifiable, Hashable, Sendable {
     case pubdate
     case click
 

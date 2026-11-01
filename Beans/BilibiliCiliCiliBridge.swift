@@ -18,6 +18,10 @@ final class BilibiliCiliCiliBridge {
     private var listenPageExhausted = false
     private var listenPrefetchTask: Task<Void, Never>?
     private var listenPrefetchRevision = 0
+    // CiliCili 选好并交给外部播放器的入口列表由 CiliCili 自己续页；
+    // Beans 这边再按 UP 主页码抢跑会因为页大小/游标不一致而跳歌，
+    // 也会在 CiliCili 续页失败时越过“停在已加载部分”的边界。
+    private var listenQueueIsCiliCiliOwned = false
 
     func configure(player: PlayerManager) {
         self.player = player
@@ -92,6 +96,7 @@ final class BilibiliCiliCiliBridge {
         listenOwnerID = request.ownerID
         listenNextPage = 2
         listenPageExhausted = false
+        listenQueueIsCiliCiliOwned = request.queue.count > 1
         expectedQueueKeys = player.queue.map(\.identityKey)
         // A supplied entry list is authoritative. Do not replace its order with author page 1.
         guard shouldResume, !request.preservesQueueOrder, request.queue.count <= 1 else { return }
@@ -136,7 +141,8 @@ final class BilibiliCiliCiliBridge {
 
     /// 播到队列倒数第三条时补下一页 UP 主视频：去重、保持顺序、失败不丢游标。
     private func prefetchListenQueuePage() {
-        guard let player, let ownerID = listenOwnerID, !listenPageExhausted,
+        guard !listenQueueIsCiliCiliOwned,
+              let player, let ownerID = listenOwnerID, !listenPageExhausted,
               listenPrefetchTask == nil,
               listenSongKey != nil,
               listenPlaybackRevision == player.queueContextRevision else { return }
@@ -188,6 +194,7 @@ final class BilibiliCiliCiliBridge {
         listenOwnerID = nil
         listenNextPage = 1
         listenPageExhausted = false
+        listenQueueIsCiliCiliOwned = false
         listenSongKey = nil
         listenPlaybackRevision = nil
         expectedQueueKeys = []
@@ -201,6 +208,9 @@ final class BilibiliCiliCiliBridge {
               player.queue.map(\.identityKey) == expectedQueueKeys else { return }
         let queue = BilibiliListenQueue.songs(for: request)
         guard queue.count > 1 else { return }
+        listenQueueIsCiliCiliOwned = true
+        listenPrefetchTask?.cancel()
+        listenPrefetchTask = nil
         player.updateBilibiliAudioContext(queue, currentSongKey: song.identityKey)
         expectedQueueKeys = player.queue.map(\.identityKey)
         listenQueueTask?.cancel()

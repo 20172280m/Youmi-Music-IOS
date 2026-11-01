@@ -2343,15 +2343,20 @@ private struct SurfaceOnlyLandscapeMoreContent: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                    } else if detailViewModel.videoListenQueueLoadFailed,
-                              detailViewModel.videoListenQueueEntries.count <= 1 {
+                    } else if detailViewModel.videoListenQueueLoadFailed {
                         Divider().padding(.leading, 44)
-                        Button("重新载入播放列表") {
-                            Task {
-                                await detailViewModel.prepareVideoListenQueue()
+                        VStack(spacing: 6) {
+                            Text(detailViewModel.videoListenQueueErrorMessage ?? "播放列表载入失败")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                            Button(detailViewModel.videoListenQueueEntries.count <= 1 ? "重新载入播放列表" : "重试续页") {
+                                Task {
+                                    await detailViewModel.retryVideoListenQueueLoading()
+                                }
                             }
+                            .font(.subheadline.weight(.semibold))
                         }
-                        .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                     } else if detailViewModel.videoListenQueueSession.isLoadingMore {
@@ -2813,11 +2818,16 @@ struct SurfaceOnlyVideoListenQueuePage: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                     }
-                } else if detailViewModel.videoListenQueueLoadFailed,
-                          detailViewModel.videoListenQueueEntries.count <= 1 {
-                    Button("重新载入播放列表") {
-                        Task {
-                            await detailViewModel.prepareVideoListenQueue()
+                } else if detailViewModel.videoListenQueueLoadFailed {
+                    VStack(spacing: 6) {
+                        Text(detailViewModel.videoListenQueueErrorMessage ?? "播放列表载入失败")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button(detailViewModel.videoListenQueueEntries.count <= 1 ? "重新载入播放列表" : "重试续页") {
+                            Task {
+                                await detailViewModel.retryVideoListenQueueLoading()
+                            }
                         }
                     }
                     .frame(maxWidth: .infinity)

@@ -10,7 +10,11 @@ struct UploaderVideosSection: View {
 
             content
         }
-        .environment(\.videoEntryContext, VideoEntryContext(title: "UP 主投稿", videos: viewModel.videos))
+        .environment(\.videoEntryContext, VideoEntryContext(
+            title: "UP 主投稿",
+            videos: viewModel.videos,
+            continuation: .uploader(mid: viewModel.seedOwner.mid, order: viewModel.videoOrder)
+        ))
     }
 
     @ViewBuilder

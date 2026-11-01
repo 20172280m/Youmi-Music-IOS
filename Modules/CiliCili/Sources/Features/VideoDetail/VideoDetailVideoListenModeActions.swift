@@ -383,6 +383,10 @@ extension VideoDetailViewModel {
         videoListenQueueSession.source.title
     }
 
+    var videoListenQueueErrorMessage: String? {
+        videoListenQueueSession.errorMessage
+    }
+
     var videoListenQueueAccessoryTitle: String {
         let entries = videoListenQueueEntries
         if isLoadingVideoListenQueue, entries.count <= 1 {
@@ -391,7 +395,8 @@ extension VideoDetailViewModel {
         guard !entries.isEmpty else { return "无可播放内容" }
         let currentIndex = entries.firstIndex(where: \.isCurrent).map { $0 + 1 } ?? 1
         let loadingSuffix = videoListenQueueSession.isLoadingMore ? " · 载入更多" : ""
-        return "\(currentIndex)/\(entries.count)\(loadingSuffix)"
+        let failureSuffix = videoListenQueueSession.errorMessage == nil ? "" : " · 载入失败"
+        return "\(currentIndex)/\(entries.count)\(loadingSuffix)\(failureSuffix)"
     }
 
     var videoListenSleepTimerAccessoryTitle: String {
@@ -625,7 +630,9 @@ extension VideoDetailViewModel {
             )
         case .uploader(let ownerMID):
             await loadMoreUploaderVideoListenQueueIfNeeded(current: entry, ownerMID: ownerMID)
-        case .currentVideo, .entryList, .pgcSeason, .related:
+        case .entryList:
+            await loadMoreEntryListVideoListenQueueIfNeeded(current: entry)
+        case .currentVideo, .pgcSeason, .related:
             return
         }
     }
@@ -670,6 +677,251 @@ extension VideoDetailViewModel {
                 videoListenQueueSession.cancelLoading(generation: generation)
             } else {
                 videoListenQueueSession.failLoadMore(error.localizedDescription, generation: generation)
+            }
+        }
+    }
+
+    /// 续页失败后的重试入口：保留已加载队列，只把失败标记清掉再试同一段。
+    func retryVideoListenQueueLoading() async {
+        guard playbackContentMode == .audioOnly else { return }
+
+        if videoListenQueueSession.errorMessage != nil,
+           videoListenQueueEntries.count > 1 {
+            videoListenQueueSession.errorMessage = nil
+            videoListenQueueSession.hasMore = true
+            if case .exhausted = videoListenQueueSession.continuation,
+               case .entryList = videoListenQueueSession.source {
+                videoListenQueueSession.continuation = .related
+            }
+            if let currentEntry = videoListenQueueEntries.first(where: \.isCurrent) {
+                await loadMoreVideoListenQueueIfNeeded(current: currentEntry)
+            }
+            return
+        }
+
+        await prepareVideoListenQueue()
+    }
+
+    private func loadMoreEntryListVideoListenQueueIfNeeded(
+        current entry: VideoListenQueueEntry
+    ) async {
+        guard videoListenQueueEntries.suffix(5).contains(where: { $0.id == entry.id }),
+              !videoListenQueueSession.isLoadingInitial,
+              !videoListenQueueSession.isLoadingMore
+        else { return }
+
+        switch videoListenQueueSession.continuation {
+        case .uploader(let mid, let order, let anchored):
+            await loadMoreEntryListUploaderContinuation(
+                mid: mid,
+                order: order,
+                anchored: anchored
+            )
+        case .related:
+            await loadMoreEntryListRelatedContinuation()
+        case .exhausted:
+            return
+        }
+    }
+
+    /// `entryList` 只是一段快照：先按入口的 UP 主维度从第 1 页往后找快照的队尾，
+    /// 边找边把缺的那段按原顺序追加；找到队尾后只用 `nextPage/nextCursor` 往后翻。
+    /// 找到队尾前的若干页可能全是重复项，所以一次续页里允许多翻几页。
+    private func loadMoreEntryListUploaderContinuation(
+        mid: Int,
+        order: UploaderVideoOrder,
+        anchored: Bool
+    ) async {
+        guard let generation = videoListenQueueSession.beginLoadMore() else { return }
+
+        let source = videoListenQueueSession.source
+        let tailVideo = videoListenQueueSession.videos.last
+        var page = max(videoListenQueueSession.nextPage, 0) + 1
+        var cursor = videoListenQueueSession.nextCursor
+        var collected: [VideoItem] = []
+        var foundTail = anchored || tailVideo == nil
+        var completedPage = page
+        var completedCursor = cursor
+        var completedHasMore = true
+        var didRetryShortFirstPage = false
+        let maximumPagesPerAttempt = 6
+
+        do {
+            var fetchedPages = 0
+            while fetchedPages < maximumPagesPerAttempt {
+                let result = try await api.fetchUploaderVideoPage(
+                    mid: mid,
+                    page: page,
+                    cursor: cursor,
+                    order: order
+                )
+                guard !Task.isCancelled else {
+                    videoListenQueueSession.cancelLoading(generation: generation)
+                    return
+                }
+                guard playbackContentMode == .audioOnly,
+                      videoListenQueueSession.source == source,
+                      videoListenQueueSession.generation == generation
+                else {
+                    videoListenQueueSession.cancelLoading(generation: generation)
+                    return
+                }
+
+                fetchedPages += 1
+                for video in result.videos {
+                    guard !collected.contains(where: {
+                        VideoListenQueueBuilder.representsSameVideo($0, video)
+                    }),
+                    !videoListenQueueSession.videos.contains(where: {
+                        VideoListenQueueBuilder.representsSameVideo($0, video)
+                    })
+                    else { continue }
+                    collected.append(video)
+                }
+                if let tailVideo,
+                   result.videos.contains(where: {
+                       VideoListenQueueBuilder.representsSameVideo($0, tailVideo)
+                   }) {
+                    foundTail = true
+                }
+
+                completedPage = page
+                completedCursor = result.nextCursor
+                completedHasMore = result.hasMore
+
+                // Web 接口每页 30 条，App 兜底接口每页 20 条。
+                // 如果第 1 页只回来 20 条且全是快照里的旧条目，可能是兜底接口；
+                // 此时再试一次第 1 页，避免下次 Web 成功时直接从第 31 条开始而漏掉 21-30。
+                if page == 1,
+                   cursor == nil,
+                   collected.isEmpty,
+                   result.videos.count < 30,
+                   result.hasMore,
+                   !didRetryShortFirstPage {
+                    didRetryShortFirstPage = true
+                    continue
+                }
+
+                page += 1
+                cursor = result.nextCursor
+
+                if foundTail, !collected.isEmpty { break }
+                if !result.hasMore { break }
+                // 已经找到队尾但本页全是重复项时继续往后翻，避免一次续页空跑。
+                // 还没找到队尾时也必须继续，直到把快照的最后一条覆盖掉。
+                if result.videos.isEmpty, result.nextCursor == nil, result.hasMore { break }
+            }
+
+            guard videoListenQueueSession.finishLoadMore(
+                videos: collected,
+                nextPage: completedPage,
+                nextCursor: completedCursor,
+                hasMore: completedHasMore,
+                generation: generation
+            ) else { return }
+
+            if !completedHasMore {
+                // 这个 UP 的投稿追完了：保留已追加部分，后续再退回相关推荐。
+                videoListenQueueSession.continuation = .related
+                videoListenQueueSession.hasMore = true
+                PlayerMetricsLog.record(
+                    .network,
+                    metricsID: detail.bvid,
+                    title: detail.title,
+                    message: "listenQueue entryList uploaderExhausted added=\(collected.count) total=\(videoListenQueueSession.videos.count)"
+                )
+                if collected.isEmpty {
+                    await loadMoreEntryListRelatedContinuation()
+                } else {
+                    updateVideoListenRemoteNavigationAvailability()
+                }
+                return
+            }
+
+            videoListenQueueSession.continuation = .uploader(
+                mid: mid,
+                order: order,
+                anchored: foundTail
+            )
+            videoListenQueueSession.hasMore = true
+            PlayerMetricsLog.record(
+                .network,
+                metricsID: detail.bvid,
+                title: detail.title,
+                message: "listenQueue entryList uploader page=\(completedPage) added=\(collected.count) total=\(videoListenQueueSession.videos.count) anchored=\(foundTail) hasMore=\(completedHasMore)"
+            )
+            updateVideoListenRemoteNavigationAvailability()
+        } catch {
+            if Task.isCancelled {
+                videoListenQueueSession.cancelLoading(generation: generation)
+            } else {
+                let message = "播放列表续页失败，已停在已载入的 \(videoListenQueueEntries.count) 首"
+                videoListenQueueSession.failLoadMore(message, generation: generation)
+                videoListenQueueSession.hasMore = false
+                playbackFallbackMessage = message
+                PlayerMetricsLog.record(
+                    .network,
+                    metricsID: detail.bvid,
+                    title: detail.title,
+                    message: "listenQueue entryList uploaderFailure=\(error.localizedDescription) total=\(videoListenQueueSession.videos.count)"
+                )
+                updateVideoListenRemoteNavigationAvailability()
+            }
+        }
+    }
+
+    /// UP 主投稿追完后，用当前视频的相关推荐兜底，保证“第 20 首之后”仍有内容可接。
+    /// 相关推荐没有翻页游标，取到一次就标记为 exhausted，失败则停在已加载部分并提示。
+    private func loadMoreEntryListRelatedContinuation() async {
+        guard let generation = videoListenQueueSession.beginLoadMore() else { return }
+
+        let source = videoListenQueueSession.source
+        let bvid = detail.bvid
+        do {
+            let videos = try await api.fetchVideoRelated(bvid: bvid)
+            guard !Task.isCancelled else {
+                videoListenQueueSession.cancelLoading(generation: generation)
+                return
+            }
+            guard playbackContentMode == .audioOnly,
+                  videoListenQueueSession.source == source,
+                  videoListenQueueSession.generation == generation
+            else {
+                videoListenQueueSession.cancelLoading(generation: generation)
+                return
+            }
+            let previousCount = videoListenQueueSession.videos.count
+            guard videoListenQueueSession.finishLoadMore(
+                videos: videos,
+                nextPage: videoListenQueueSession.nextPage,
+                nextCursor: nil,
+                hasMore: false,
+                generation: generation
+            ) else { return }
+            videoListenQueueSession.continuation = .exhausted
+            videoListenQueueSession.hasMore = false
+            PlayerMetricsLog.record(
+                .network,
+                metricsID: detail.bvid,
+                title: detail.title,
+                message: "listenQueue entryList related added=\(max(videoListenQueueSession.videos.count - previousCount, 0)) total=\(videoListenQueueSession.videos.count)"
+            )
+            updateVideoListenRemoteNavigationAvailability()
+        } catch {
+            if Task.isCancelled {
+                videoListenQueueSession.cancelLoading(generation: generation)
+            } else {
+                let message = "播放列表续页失败，已停在已载入的 \(videoListenQueueEntries.count) 首"
+                videoListenQueueSession.failLoadMore(message, generation: generation)
+                videoListenQueueSession.hasMore = false
+                playbackFallbackMessage = message
+                PlayerMetricsLog.record(
+                    .network,
+                    metricsID: detail.bvid,
+                    title: detail.title,
+                    message: "listenQueue entryList relatedFailure=\(error.localizedDescription) total=\(videoListenQueueSession.videos.count)"
+                )
+                updateVideoListenRemoteNavigationAvailability()
             }
         }
     }
@@ -1140,7 +1392,22 @@ extension VideoDetailViewModel {
             relativeTo: detail,
             direction: .next
         ) else {
+            // 队尾不能只回准备队列：`entryList` 快照本身是“ready”的，
+            // 准备逻辑会直接 return，队列就永远停在最后一条。
+            PlayerMetricsLog.record(
+                .network,
+                metricsID: detail.bvid,
+                title: detail.title,
+                message: "listenQueue continuation tail source=\(videoListenQueueSession.source.title) count=\(videoListenQueueEntries.count) hasMore=\(videoListenQueueSession.hasMore) nextPage=\(videoListenQueueSession.nextPage) cursor=\(videoListenQueueSession.nextCursor == nil ? 0 : 1) kind=\(String(describing: videoListenQueueSession.continuation))"
+            )
             scheduleVideoListenQueuePreparation()
+            if let currentEntry = videoListenQueueEntries.first(where: \.isCurrent) {
+                let task = Task(priority: .utility) { [weak self] in
+                    guard let self else { return }
+                    await self.loadMoreVideoListenQueueIfNeeded(current: currentEntry)
+                }
+                trackBackgroundTask(task)
+            }
             updateVideoListenRemoteNavigationAvailability()
             return
         }
