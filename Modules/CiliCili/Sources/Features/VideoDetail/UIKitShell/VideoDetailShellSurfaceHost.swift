@@ -2781,7 +2781,16 @@ struct SurfaceOnlyVideoListenQueuePage: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
-                ForEach(detailViewModel.videoListenQueueEntries) { entry in
+                // 队列位置：面板里看不出现在是第几首、这一队总共载入了多少，
+                // 验收「第 20 首之后能不能接上第 21 首」和日常使用都要靠它。
+                HStack {
+                    Text("队列 \(detailViewModel.videoListenQueueAccessoryTitle)")
+                    Spacer()
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                ForEach(Array(detailViewModel.videoListenQueueEntries.enumerated()), id: \.element.id) { index, entry in
                     Button {
                         detailViewModel.selectVideoListenQueueEntry(entry)
                         closeSheet()
@@ -2804,7 +2813,14 @@ struct SurfaceOnlyVideoListenQueuePage: View {
                                 }
                             }
                         } icon: {
-                            Image(systemName: entry.isCurrent ? "checkmark.circle.fill" : "play.circle")
+                            if entry.isCurrent {
+                                Image(systemName: "checkmark.circle.fill")
+                            } else {
+                                Text("\(index + 1)")
+                                    .font(.footnote.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 20)
+                            }
                         }
                     }
                     .task {
