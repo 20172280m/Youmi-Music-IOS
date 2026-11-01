@@ -272,6 +272,17 @@ struct BeansDiagnosticEntry: Identifiable, Equatable {
         self.position = position
     }
 
+    /// 给用户看的内容：去掉 route=/action=/error=/network 这些标记词，
+    /// 直接一句短话。列表和详情都用这一份，避免详情里露出参数名。
+    var displayContent: String {
+        var text = content
+        if text.hasPrefix("route=") { text.removeFirst("route=".count) }
+        else if text.hasPrefix("action=") { text.removeFirst("action=".count) }
+        else if text.hasPrefix("error=") { text.removeFirst("error=".count) }
+        else if text.hasPrefix("network ") { text.removeFirst("network ".count) }
+        return text
+    }
+
     /// 性能采样、手动快照这类没有交互语义的记录不进列表，仍然留在导出日志里。
     static func category(for content: String) -> Category? {
         if content.hasPrefix("route=") { return .page }
@@ -450,52 +461,66 @@ struct BeansDiagnosticsLogView: View {
     }()
 
     var body: some View {
-        VStack(spacing: 0) {
-            pills
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 10)
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    if entries.isEmpty {
-                        Text(diagnostics.recentEntries.isEmpty
-                             ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
-                             : "这一类还没有记录。")
-                            .font(BeansFont.appFont(14))
-                            .foregroundStyle(Color.beansComment)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 64)
-                            .accessibilityIdentifier("diagnostics-empty")
-                    } else {
-                        SettingsCatalogGroup {
-                            VStack(spacing: 0) {
-                                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                                    row(entry)
-                                    if index != entries.count - 1 {
-                                        Divider().overlay(Color.primary.opacity(0.09))
+        ZStack {
+            SettingsContentBase()
+            VStack(spacing: 0) {
+                header
+                pills
+                    .padding(.horizontal, 16)
+                    .padding(.top, 2)
+                    .padding(.bottom, 10)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if entries.isEmpty {
+                            Text(diagnostics.recentEntries.isEmpty
+                                 ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
+                                 : "这一类还没有记录。")
+                                .font(BeansFont.appFont(14))
+                                .foregroundStyle(Color.beansComment)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 64)
+                                .accessibilityIdentifier("diagnostics-empty")
+                        } else {
+                            SettingsCatalogGroup {
+                                VStack(spacing: 0) {
+                                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                        row(entry)
+                                        if index != entries.count - 1 {
+                                            Divider().overlay(Color.primary.opacity(0.09))
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
             }
         }
-        .navigationTitle("最近操作")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            // 计数跟标题同一行右端，药丸那行只放药丸（Ato 口径，对应 Camo 的「标题旁边」）。
-            ToolbarItem(placement: .primaryAction) {
-                Text("\(entries.count) 条")
-                    .font(BeansFont.appFont(13, .medium))
-                    .foregroundStyle(Color.beansComment)
-                    .accessibilityIdentifier("diagnostics-count")
-            }
+    }
+
+    /// 标题与计数同一行：标题靠左，计数靠右。计数是静态文字，
+    /// 不放导航栏工具项——那会被系统渲染成一枚看起来可点的玻璃圆。
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("最近操作")
+                .font(BeansFont.appFont(17, .semibold))
+                .foregroundStyle(Color.beansLabel)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 12)
+            Text("\(entries.count) 条")
+                .font(BeansFont.appFont(13, .medium))
+                .foregroundStyle(Color.beansComment)
+                .accessibilityIdentifier("diagnostics-count")
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 2)
+        .padding(.bottom, 10)
     }
 
     private var pills: some View {
@@ -523,13 +548,14 @@ struct BeansDiagnosticsLogView: View {
         .accessibilityLabel(Text("按类型筛选"))
     }
 
-    /// 与音质那排同一套：玻璃胶囊 + 选中琥珀底。
+    /// 与音质那排同一套：中性玻璃胶囊 + 选中同色描边。
+    /// 不再用同色 16% 填充：那层填充会把底抬向文字色，同色文字压上去对比度不够。
     @ViewBuilder
     private func pillBackground(selected: Bool) -> some View {
         ZStack {
             BeansGlass(shape: Capsule())
             if selected {
-                Capsule().fill(Color.beansAmber.opacity(0.16))
+                Capsule().strokeBorder(Color.beansAmber, lineWidth: 1)
             }
         }
     }
@@ -550,7 +576,7 @@ struct BeansDiagnosticsLogView: View {
                 }
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(Color.beansComment)
-                Text(summary(entry.content))
+                Text(entry.displayContent)
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansLabel)
                     .lineLimit(1)
@@ -562,19 +588,10 @@ struct BeansDiagnosticsLogView: View {
         }
         .buttonStyle(GlassPressButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(time)，\(entry.category.title)，\(summary(entry.content))"))
+        .accessibilityLabel(Text("\(time)，\(entry.category.title)，\(entry.displayContent)"))
     }
 
     /// 类型已经在上一列，摘要里不重复那个前缀。
-    private func summary(_ content: String) -> String {
-        var text = content
-        if text.hasPrefix("route=") { text.removeFirst("route=".count) }
-        else if text.hasPrefix("action=") { text.removeFirst("action=".count) }
-        else if text.hasPrefix("error=") { text.removeFirst("error=".count) }
-        else if text.hasPrefix("network ") { text.removeFirst("network ".count) }
-        return text
-    }
-
     /// 圆点只是辅助，类型永远以文字出现。
     private func dotColor(_ category: BeansDiagnosticEntry.Category) -> Color {
         switch category {
@@ -601,25 +618,28 @@ struct BeansDiagnosticDetailView: View {
     }
 
     private var copyText: String {
-        var lines = ["时间：\(timeText)", "类型：\(entry.category.title)", "内容：\(entry.content)"]
+        var lines = ["时间：\(timeText)", "类型：\(entry.category.title)", "内容：\(entry.displayContent)"]
         if let position = entry.position { lines.append("位置：\(position)") }
         return lines.joined(separator: "\n")
     }
 
     var body: some View {
-        ScrollView {
-            SettingsCatalogGroup {
-                VStack(alignment: .leading, spacing: 14) {
-                    field("时间", timeText)
-                    field("类型", entry.category.title)
-                    field("内容", entry.content)
-                    if let position = entry.position {
-                        field("位置", position)
+        ZStack {
+            SettingsContentBase()
+            ScrollView {
+                SettingsCatalogGroup {
+                    VStack(alignment: .leading, spacing: 14) {
+                        field("时间", timeText)
+                        field("类型", entry.category.title)
+                        field("内容", entry.displayContent)
+                        if let position = entry.position {
+                            field("位置", position)
+                        }
                     }
+                    .padding(.vertical, 16)
                 }
-                .padding(.vertical, 16)
+                .padding(16)
             }
-            .padding(16)
         }
         .navigationTitle("记录详情")
         .navigationBarTitleDisplayMode(.inline)

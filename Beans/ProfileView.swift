@@ -2067,11 +2067,12 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func liquidQualityOptionBackground(selected: Bool) -> some View {
+        // 选中态不再垫同色 16% 填充：那层填充会把底抬向文字色那一侧，
+        // 同色文字压上去浅色只剩 4.2、深色 2.55。改成中性玻璃底 + 同色描边。
         ZStack {
             BeansGlass(shape: Capsule())
             if selected {
-                Capsule()
-                    .fill(Color.beansAmber.opacity(0.16))
+                Capsule().strokeBorder(Color.beansAmber, lineWidth: 1)
             }
         }
     }
@@ -4948,7 +4949,7 @@ private struct SettingsLiquidSheetPresentation: ViewModifier {
 /// than stacking another glass layer after the sheet has expanded.
 /// 设置页内容底板：与 B 站内容区同一个口径（浅色白 0.86、深色近黑 0.86），
 /// 保证正文/次要文字在任何壁纸下都有稳定的对比度，壁纸只作隐约底色。
-private struct SettingsContentBase: View {
+struct SettingsContentBase: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
