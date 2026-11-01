@@ -2072,7 +2072,7 @@ struct SettingsView: View {
         ZStack {
             BeansGlass(shape: Capsule())
             if selected {
-                Capsule().strokeBorder(Color.beansAmber, lineWidth: 1)
+                Capsule().strokeBorder(Color.beansAmberOnGlass, lineWidth: 1)
             }
         }
     }
@@ -2158,7 +2158,7 @@ struct SettingsView: View {
                                 }
                             }
                             .font(BeansFont.appFont(12, selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .foregroundStyle(selected ? Color.beansAmberOnGlass : Color.beansLabel)
                             .padding(.horizontal, 12)
                             .frame(height: 31)
                             .background {
@@ -2628,7 +2628,7 @@ struct SettingsView: View {
                     } label: {
                         Text(quality.displayName)
                             .font(BeansFont.appFont(12, selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .foregroundStyle(selected ? Color.beansAmberOnGlass : Color.beansLabel)
                             .padding(.horizontal, 12)
                             .frame(height: 31)
                             .background { liquidQualityOptionBackground(selected: selected) }
@@ -2651,7 +2651,7 @@ struct SettingsView: View {
                     } label: {
                         Text(quality.displayName)
                             .font(BeansFont.appFont(12, selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .foregroundStyle(selected ? Color.beansAmberOnGlass : Color.beansLabel)
                             .padding(.horizontal, 12)
                             .frame(height: 31)
                             .background { liquidQualityOptionBackground(selected: selected) }

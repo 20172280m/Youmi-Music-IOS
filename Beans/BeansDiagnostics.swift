@@ -449,6 +449,7 @@ struct BeansDiagnosticsSettingsView: View {
 struct BeansDiagnosticsLogView: View {
     @ObservedObject private var diagnostics = BeansDiagnostics.shared
     @State private var filter: BeansDiagnosticFilter = .all
+    @Environment(\.colorScheme) private var colorScheme
 
     private var entries: [BeansDiagnosticEntry] {
         diagnostics.recentEntries.filter(filter.matches)
@@ -463,6 +464,11 @@ struct BeansDiagnosticsLogView: View {
     var body: some View {
         ZStack {
             SettingsContentBase()
+            // 浅色下壁纸若是白的，页底和卡片玻璃都是纯白，只靠一圈描边分不出来。
+            // 这里把页底压 3.5% 中性灰，卡片就立起来了（深色页底本来已经更黑，不再叠）。
+            Color.black.opacity(colorScheme == .light ? 0.035 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             VStack(spacing: 0) {
                 header
                 pills
@@ -534,7 +540,7 @@ struct BeansDiagnosticsLogView: View {
                     } label: {
                         Text(item.title)
                             .font(BeansFont.appFont(12, selected ? .semibold : .medium))
-                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .foregroundStyle(selected ? Color.beansAmberOnGlass : Color.beansLabel)
                             .padding(.horizontal, 12)
                             .frame(height: 31)
                             .background { pillBackground(selected: selected) }
@@ -555,7 +561,7 @@ struct BeansDiagnosticsLogView: View {
         ZStack {
             BeansGlass(shape: Capsule())
             if selected {
-                Capsule().strokeBorder(Color.beansAmber, lineWidth: 1)
+                Capsule().strokeBorder(Color.beansAmberOnGlass, lineWidth: 1)
             }
         }
     }
@@ -606,6 +612,7 @@ struct BeansDiagnosticsLogView: View {
 /// 一条记录的详情：时间、类型、内容，技术位置放最后。
 struct BeansDiagnosticDetailView: View {
     let entry: BeansDiagnosticEntry
+    @Environment(\.colorScheme) private var colorScheme
 
     private static let detailTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -626,6 +633,9 @@ struct BeansDiagnosticDetailView: View {
     var body: some View {
         ZStack {
             SettingsContentBase()
+            Color.black.opacity(colorScheme == .light ? 0.035 : 0)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             ScrollView {
                 SettingsCatalogGroup {
                     VStack(alignment: .leading, spacing: 14) {

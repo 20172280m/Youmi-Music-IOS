@@ -42,6 +42,22 @@ extension UIColor {
         let accent = ThemeStore.shared.accent
         return beansDynamic(light: accent.tintLight, dark: accent.tintDark)
     }
+    /// 压在胶囊玻璃上的着色字：胶囊底比页面亮一档，深色下直接用主题色只剩 3.75:1，
+    /// 所以只在这一处把深色主题色提亮 20%（实测 4.7:1），浅色不变。
+    static var beansAmberOnGlass: UIColor {
+        if let custom = ThemeStore.shared.customAccentHex, let c = UIColor(hex: custom) {
+            return beansDynamic(light: c.shaded(0.25), dark: lifted(c, by: 0.2))
+        }
+        let accent = ThemeStore.shared.accent
+        return beansDynamic(light: accent.tintLight, dark: lifted(accent.tintDark, by: 0.2))
+    }
+
+    static func lifted(_ color: UIColor, by amount: CGFloat) -> UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let k = min(max(amount, 0), 1)
+        return UIColor(red: r + (1 - r) * k, green: g + (1 - g) * k, blue: b + (1 - b) * k, alpha: a)
+    }
     static let beansSage = beansDynamic(
         light: UIColor(red: 0.384, green: 0.482, blue: 0.310, alpha: 1),
         dark: UIColor(red: 0.560, green: 0.650, blue: 0.480, alpha: 1)
@@ -77,6 +93,8 @@ extension Color {
     }
     /// 全局着色：跟随当前配色主题即时变化（所有页面统一生效）
     static var beansAmber: Color { Color(uiColor: .beansAmber) }
+    /// 胶囊选中态的文字与描边用色（深色比 beansAmber 亮 20%）。
+    static var beansAmberOnGlass: Color { Color(uiColor: .beansAmberOnGlass) }
     static let beansSage = Color(uiColor: .beansSage)
     static let beansGlassFill = Color(uiColor: .beansGlassFill)
     /// 当前配色主题的高亮色（播放器进度点 / 光斑 / 歌词高亮等）
