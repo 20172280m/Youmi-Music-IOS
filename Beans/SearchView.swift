@@ -476,9 +476,16 @@ struct SearchView: View {
                     contentArea
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
+                // 键盘弹着时行点击会被滚动手势收走，先让「点空白处（含列表）」直接收键盘，
+                // simultaneous 不会挡住行自己的点击。
+                .simultaneousGesture(
+                    TapGesture().onEnded {
+                        searchController.dismissKeyboard()
+                    }
+                )
             }
             .beansScrollIndicatorsHidden()
-            .beansScrollDismissesKeyboardImmediately()
+            .beansScrollDismissesKeyboard()
         }
     }
 
@@ -501,10 +508,15 @@ struct SearchView: View {
                     legacyContentArea
                         .frame(maxWidth: .infinity, alignment: .top)
                         .padding(.bottom, 120)
+                        .simultaneousGesture(
+                            TapGesture().onEnded {
+                                searchController.dismissKeyboard()
+                            }
+                        )
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .beansScrollIndicatorsHidden()
-                .beansScrollDismissesKeyboardImmediately()
+                .beansScrollDismissesKeyboard()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }

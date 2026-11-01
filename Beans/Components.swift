@@ -870,12 +870,6 @@ extension View {
         if #available(iOS 16, *) { self.scrollDismissesKeyboard(.interactively) } else { self }
     }
 
-    /// iOS 16+ 一滚动就收起键盘（搜索页用：键盘压着结果，点不动）
-    @ViewBuilder
-    func beansScrollDismissesKeyboardImmediately() -> some View {
-        if #available(iOS 16, *) { self.scrollDismissesKeyboard(.immediately) } else { self }
-    }
-
     /// iOS 16+ 隐藏滚动内容默认背景，低版本保持默认
     @ViewBuilder
     func beansScrollContentBackgroundHidden() -> some View {
