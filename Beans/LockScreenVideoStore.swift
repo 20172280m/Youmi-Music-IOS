@@ -51,6 +51,7 @@ actor BeansLockScreenVideoStore {
         guard pending.isEmpty, pendingRetains == 0 else { return }
         let protected = Set(files.filter { (retained[$0.key] ?? 0) > 0 }.flatMap { $0.value })
         try BeansCacheFiles.clearContents(of: directory, under: directory.deletingLastPathComponent(), retaining: protected)
+        BeansLogger.shared.log("锁屏素材清理：保留 \(protected.count) 个文件", level: .debug)
 
     }
 

@@ -12,16 +12,36 @@ final class BeansLockScreenArtwork {
     private var entries: [String: [String: MPMediaItemAnimatedArtwork]] = [:]
     private var pending = Set<String>()
     var onReady: (() -> Void)?
+    /// 只为诊断日志限频：同一状态不反复写，免得每次切歌刷屏。
+    private var loggedDisabled = false
+    private var loggedUnsupported = false
+    private var lastLoggedIdentifier: String?
 
     func artwork(sourceURL: URL) -> [String: MPMediaItemAnimatedArtwork] {
         guard UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true,
-              !sourceURL.isFileURL || FileManager.default.fileExists(atPath: sourceURL.path) else { return [:] }
+              !sourceURL.isFileURL || FileManager.default.fileExists(atPath: sourceURL.path) else {
+            if !loggedDisabled {
+                loggedDisabled = true
+                loggedUnsupported = false
+                BeansLogger.shared.log("锁屏沉浸素材：开关已关闭，不生成", level: .debug)
+            }
+            return [:]
+        }
+        loggedDisabled = false
         let revision = (try? sourceURL.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]))
         let identifier = "beans-lock-screen|\(sourceURL.absoluteString)|\(revision?.fileSize ?? 0)|\(revision?.contentModificationDate?.timeIntervalSince1970 ?? 0)"
         if let existing = entries[identifier] { return existing }
         guard pending.insert(identifier).inserted else { return [:] }
         let keys = MPNowPlayingInfoCenter.supportedAnimatedArtworkKeys
-        guard !keys.isEmpty else { pending.remove(identifier); return [:] }
+        guard !keys.isEmpty else {
+            pending.remove(identifier)
+            if !loggedUnsupported {
+                loggedUnsupported = true
+                BeansLogger.shared.log("锁屏沉浸素材：本机不支持动态封面", level: .debug)
+            }
+            return [:]
+        }
+        loggedUnsupported = false
         Task { @MainActor [weak self] in
             let result = await Task.detached(priority: .utility) { () -> [String: MPMediaItemAnimatedArtwork] in
                 guard let retained = try? await BeansLockScreenVideoStore.shared.retain(source: sourceURL, identifier: identifier) else { return [:] }
@@ -45,6 +65,12 @@ final class BeansLockScreenArtwork {
             self.pending.remove(identifier)
             if self.entries.count >= 4 { self.entries.removeAll() }
             self.entries[identifier] = result
+            if self.lastLoggedIdentifier != identifier {
+                self.lastLoggedIdentifier = identifier
+                BeansLogger.shared.log(result.isEmpty
+                    ? "锁屏沉浸素材：生成失败，本次不上动态封面"
+                    : "锁屏沉浸素材：已生成 \(result.count) 个规格", level: .debug)
+            }
             self.onReady?()
         }
         return [:]

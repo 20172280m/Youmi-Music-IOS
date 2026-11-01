@@ -1982,6 +1982,12 @@ struct PlayerView: View {
                     showDownloadPicker = true
                 }
             }
+            moreActionRow(immersiveDetailEnabled ? "切换到普通界面" : "切换到沉浸详情界面",
+                          systemName: "rectangle.expand.vertical") {
+                showMoreActions = false
+                immersiveDetailEnabled.toggle()
+                BeansHaptics.select()
+            }
             moreActionRow("播放器设置", systemName: "slider.horizontal.3") {
                 showMoreActions = false
                 openPlayerSettings()
