@@ -69,12 +69,7 @@ struct BiliPlayerControlsOverlayLayer: View {
             }
         }
         .opacity(state.playbackControlsOpacity)
-        // 可见即应可点：`acceptsHitTesting` 在自动隐藏动画结束后会被置 false，
-        // 某些路径下叠层仍按 opacity 1 显示，于是控件看得见、点不动，
-        // 读屏也读不到（SwiftUI 不为禁止点击的子树建无障碍元素）。
-        .allowsHitTesting(
-            state.playbackControlsAllowsHitTesting || state.playbackControlsOpacity > 0.5
-        )
+        .allowsHitTesting(state.playbackControlsAllowsHitTesting)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
