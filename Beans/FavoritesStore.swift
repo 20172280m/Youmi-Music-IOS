@@ -63,6 +63,7 @@ final class FavoritesStore: ObservableObject {
     /// 切换收藏状态；返回是否成功（云端同步失败时网易云会回滚）
     @discardableResult
     func toggle(_ song: Song) async -> Bool {
+        BeansDiagnostics.shared.recordTap(isLiked(song) ? "取消收藏" : "收藏")
         switch song.source {
         case .netease:
             let liked = !isLiked(song)

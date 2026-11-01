@@ -416,6 +416,8 @@ struct RootView: View {
             HighRefreshKeeper.shared.startIfNeeded()
             DeveloperFPSOverlayWindow.shared.setVisible(homeFrameMeterEnabled)
             normalizeTabSelection()
+            // 开关文案承诺「页面进入」，所以切 tab 和首次进页都各记一条。
+            BeansDiagnostics.shared.recordPage(selection.title)
             guard !rootLayoutSettled else { return }
             DispatchQueue.main.async {
                 var transaction = Transaction()
@@ -427,6 +429,12 @@ struct RootView: View {
         }
         .onChange(of: homeFrameMeterEnabled) { enabled in
             DeveloperFPSOverlayWindow.shared.setVisible(enabled)
+        }
+        .onChange(of: selection) { tab in
+            BeansDiagnostics.shared.recordPage(tab.title)
+        }
+        .onChange(of: showPlayer) { shown in
+            if shown { BeansDiagnostics.shared.recordPage("播放页") }
         }
         .onChange(of: disclaimerAccepted) { accepted in
             if accepted, ChangelogStore.shouldShowWhatsNew {

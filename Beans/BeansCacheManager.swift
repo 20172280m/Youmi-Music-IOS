@@ -60,6 +60,7 @@ final class BeansCacheManager: ObservableObject {
         guard !working else { return }
         working = true
         defer { working = false }
+        BeansDiagnostics.shared.recordTap(categories.count == BeansCacheCategory.allCases.count ? "清理全部缓存" : "清理缓存")
         var notes: [String] = []
         var cleared = 0
         for category in BeansCacheCategory.allCases where categories.contains(category) {

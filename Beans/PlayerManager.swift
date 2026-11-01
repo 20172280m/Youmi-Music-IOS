@@ -499,6 +499,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         savePersistedPlaybackState()
         updateNowPlaying()
+        BeansDiagnostics.shared.recordTap(isPlaying ? "播放" : "暂停")
     }
 
     func next(manual: Bool = true) {

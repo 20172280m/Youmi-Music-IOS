@@ -2463,6 +2463,7 @@ struct SettingsView: View {
         }
         .onAppear {
             homeRenderingPaused = true
+            BeansDiagnostics.shared.recordPage("设置")
         }
         .onDisappear {
             homeRenderingPaused = false

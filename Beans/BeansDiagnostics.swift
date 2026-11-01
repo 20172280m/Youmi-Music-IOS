@@ -64,6 +64,17 @@ final class BeansDiagnostics: ObservableObject {
         record("action=\(action)", level: .debug, file: file, line: line, function: function)
     }
 
+    /// 页面进入：走 route= 这条线，列表里归到「页面进入」。
+    /// 开关文案承诺记录页面进入，所以主要页面都显式报一次自己的名字。
+    func recordPage(_ name: String, file: String = #fileID, line: Int = #line, function: String = #function) {
+        route(name, file: file, line: line, function: function)
+    }
+
+    /// 点击：走 action= 这条线，列表里归到「点击」，只记按钮名，不记输入内容。
+    func recordTap(_ name: String, file: String = #fileID, line: Int = #line, function: String = #function) {
+        recordAction("点击：\(name)", file: file, line: line, function: function)
+    }
+
     func recordNetwork(url: URL, method: String, status: Int? = nil, duration: TimeInterval? = nil, error: String? = nil,
                        file: String = #fileID, line: Int = #line, function: String = #function) {
         var message = "network method=\(method) url=\(url.absoluteString)"
@@ -361,8 +372,8 @@ struct BeansDiagnosticsSettingsView: View {
                         diagnosticRow("当前页面", value: diagnostics.lastRoute)
                         diagnosticRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
                         HStack(spacing: 10) {
-                            actionButton("camera.viewfinder", "记录快照") { _ = diagnostics.snapshot() ; ToastCenter.shared.show("诊断快照已记录") }
-                            actionButton("square.and.arrow.up", "导出日志") { showShare = true }
+                            actionButton("camera.viewfinder", "记录快照") { diagnostics.recordTap("记录快照") ; _ = diagnostics.snapshot() ; ToastCenter.shared.show("诊断快照已记录") }
+                            actionButton("square.and.arrow.up", "导出日志") { diagnostics.recordTap("导出日志") ; showShare = true }
                         }
                         Button(role: .destructive) { showClearConfirm = true } label: {
                             Label("清空本地诊断日志", systemImage: "trash")
@@ -394,8 +405,9 @@ struct BeansDiagnosticsSettingsView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
         }
         .sheet(isPresented: $showShare) { ShareSheet(items: [diagnostics.exportLogURL()]) }
+        .onAppear { BeansDiagnostics.shared.recordPage("诊断与日志") }
         .confirmationDialog("确定清空本地诊断日志？", isPresented: $showClearConfirm, titleVisibility: .visible) {
-            Button("清空", role: .destructive) { diagnostics.clear() }
+            Button("清空", role: .destructive) { diagnostics.recordTap("清空诊断日志") ; diagnostics.clear() }
             Button("取消", role: .cancel) {}
         }
     }
@@ -437,11 +449,6 @@ struct BeansDiagnosticsLogView: View {
                 .padding(.bottom, 10)
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("\(entries.count) 条")
-                        .font(BeansFont.appFont(12))
-                        .foregroundStyle(Color.beansComment)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .accessibilityIdentifier("diagnostics-count")
                     if entries.isEmpty {
                         Text(diagnostics.recentEntries.isEmpty
                              ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
@@ -472,6 +479,15 @@ struct BeansDiagnosticsLogView: View {
         }
         .navigationTitle("最近操作")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 计数跟标题同一行右端，药丸那行只放药丸（Ato 口径，对应 Camo 的「标题旁边」）。
+            ToolbarItem(placement: .primaryAction) {
+                Text("\(entries.count) 条")
+                    .font(BeansFont.appFont(13, .medium))
+                    .foregroundStyle(Color.beansComment)
+                    .accessibilityIdentifier("diagnostics-count")
+            }
+        }
     }
 
     private var pills: some View {

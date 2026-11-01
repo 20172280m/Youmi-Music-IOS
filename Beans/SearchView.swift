@@ -579,6 +579,7 @@ struct SearchView: View {
     private func performSearch(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        BeansDiagnostics.shared.recordTap("搜索")
         keyword = trimmed
         searchController.dismissKeyboard()
         debounceTask?.cancel()
