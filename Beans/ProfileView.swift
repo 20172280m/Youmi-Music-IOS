@@ -4905,7 +4905,7 @@ struct SettingsView: View {
 
 // MARK: - 均衡器
 
-private struct SettingsCatalogGroup<Content: View>: View {
+struct SettingsCatalogGroup<Content: View>: View {
     private let content: Content
 
     init(@ViewBuilder content: () -> Content) {

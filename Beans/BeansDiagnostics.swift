@@ -323,11 +323,7 @@ struct BeansDiagnosticsSettingsView: View {
     @ObservedObject private var diagnostics = BeansDiagnostics.shared
     @State private var showShare = false
     @State private var showClearConfirm = false
-    @State private var logFilter: BeansDiagnosticFilter = .all
-
-    private var recentEntryCount: Int {
-        diagnostics.recentEntries.filter(logFilter.matches).count
-    }
+    private var recentEntryCount: Int { diagnostics.recentEntries.count }
 
     var body: some View {
         BeansNavigationStack {
@@ -344,20 +340,23 @@ struct BeansDiagnosticsSettingsView: View {
                             .foregroundStyle(Color.beansComment)
                         diagnosticRow("构建", value: BeansBuildStamp.text)
                         NavigationLink {
-                            BeansDiagnosticsLogView(filter: $logFilter)
+                            BeansDiagnosticsLogView()
                         } label: {
                             HStack(spacing: 6) {
                                 Text("最近操作").foregroundStyle(Color.beansComment)
                                 Spacer()
                                 Text("\(recentEntryCount) 条").foregroundStyle(Color.beansLabel)
                                 Image(systemName: "chevron.right")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.system(size: 13, weight: .semibold))
                                     .foregroundStyle(Color.beansComment)
                             }
                             .font(BeansFont.appFont(12))
+                            .frame(minHeight: 44)
                             .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(GlassPressButtonStyle())
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Text("最近操作，\(recentEntryCount) 条，进入列表"))
                         .accessibilityIdentifier("diagnostics-recent")
                         diagnosticRow("当前页面", value: diagnostics.lastRoute)
                         diagnosticRow("系统", value: "\(UIDevice.current.systemName) \(UIDevice.current.systemVersion)")
@@ -413,10 +412,12 @@ struct BeansDiagnosticsSettingsView: View {
 }
 
 
-/// 最近操作列表：只展示已经记下的记录，不加新采集、不碰网络层。
+
+/// A4 列表 / 筛选 / 详情。数据只来自已经记下的记录，不新增采集、不碰请求层。
+/// 视觉照 design 的 diagnostics-list-spec：横滚药丸筛选、56 行高、详情四项字段。
 struct BeansDiagnosticsLogView: View {
     @ObservedObject private var diagnostics = BeansDiagnostics.shared
-    @Binding var filter: BeansDiagnosticFilter
+    @State private var filter: BeansDiagnosticFilter = .all
 
     private var entries: [BeansDiagnosticEntry] {
         diagnostics.recentEntries.filter(filter.matches)
@@ -429,86 +430,125 @@ struct BeansDiagnosticsLogView: View {
     }()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Picker("筛选", selection: $filter) {
-                    ForEach(BeansDiagnosticFilter.allCases) { item in
-                        Text(item.title).tag(item)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .accessibilityIdentifier("diagnostics-filter")
-
-                Text("\(entries.count) 条")
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .accessibilityIdentifier("diagnostics-count")
-
-                if entries.isEmpty {
-                    Text(diagnostics.recentEntries.isEmpty
-                         ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
-                         : "这一类还没有记录。")
-                        .font(BeansFont.appFont(13))
+        VStack(spacing: 0) {
+            pills
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("\(entries.count) 条")
+                        .font(BeansFont.appFont(12))
                         .foregroundStyle(Color.beansComment)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, 8)
-                        .accessibilityIdentifier("diagnostics-empty")
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                            row(entry)
-                            if index != entries.count - 1 {
-                                Divider().opacity(0.35)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .accessibilityIdentifier("diagnostics-count")
+                    if entries.isEmpty {
+                        Text(diagnostics.recentEntries.isEmpty
+                             ? "还没有诊断记录。用一会儿应用，这里会按时间列出页面进入、点击和网络请求。"
+                             : "这一类还没有记录。")
+                            .font(BeansFont.appFont(14))
+                            .foregroundStyle(Color.beansComment)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 64)
+                            .accessibilityIdentifier("diagnostics-empty")
+                    } else {
+                        SettingsCatalogGroup {
+                            VStack(spacing: 0) {
+                                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                                    row(entry)
+                                    if index != entries.count - 1 {
+                                        Divider().overlay(Color.primary.opacity(0.09))
+                                    }
+                                }
                             }
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .background {
-                        BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    }
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
             }
-            .padding(16)
         }
         .navigationTitle("最近操作")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func row(_ entry: BeansDiagnosticEntry) -> some View {
-        NavigationLink {
-            BeansDiagnosticDetailView(entry: entry)
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(Self.rowTimeFormatter.string(from: entry.date))
-                    .font(BeansFont.appFont(12))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.beansComment)
-                Text(entry.category.title)
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Text(summary(entry.content))
-                    .font(BeansFont.appFont(12))
-                    .foregroundStyle(Color.beansComment)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 0)
+    private var pills: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(BeansDiagnosticFilter.allCases) { item in
+                    let selected = filter == item
+                    Button {
+                        filter = item
+                        BeansHaptics.select()
+                    } label: {
+                        Text(item.title)
+                            .font(BeansFont.appFont(12, selected ? .semibold : .medium))
+                            .foregroundStyle(selected ? Color.beansAmber : Color.beansLabel)
+                            .padding(.horizontal, 12)
+                            .frame(height: 31)
+                            .background { pillBackground(selected: selected) }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
             }
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
+            .padding(.horizontal, 1)
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(Text("按类型筛选"))
     }
 
-    /// 类型已经在上一列，摘要里就不重复那个前缀了。
-    private func summary(_ content: String) -> String {
-        var text = content
-        if text.hasPrefix("route=") { text.removeFirst("route=".count) }
-        else if text.hasPrefix("action=") { text.removeFirst("action=".count) }
-        else if text.hasPrefix("error=") { text.removeFirst("error=".count) }
-        else if text.hasPrefix("network ") { text.removeFirst("network ".count) }
-        return text
+    /// 与音质那排同一套：玻璃胶囊 + 选中琥珀底。
+    @ViewBuilder
+    private func pillBackground(selected: Bool) -> some View {
+        ZStack {
+            BeansGlass(shape: Capsule())
+            if selected {
+                Capsule().fill(Color.beansAmber.opacity(0.16))
+            }
+        }
+    }
+
+    private func row(_ entry: BeansDiagnosticEntry) -> some View {
+        let time = Self.rowTimeFormatter.string(from: entry.date)
+        return NavigationLink {
+            BeansDiagnosticDetailView(entry: entry)
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(time)
+                        .monospacedDigit()
+                    Circle()
+                        .fill(dotColor(entry.category))
+                        .frame(width: 6, height: 6)
+                    Text(entry.category.title)
+                }
+                .font(BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+                Text(entry.content)
+                    .font(BeansFont.appFont(13))
+                    .foregroundStyle(Color.beansLabel)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 56)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(GlassPressButtonStyle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("\(time)，\(entry.category.title)，\(entry.content)"))
+    }
+
+    /// 圆点只是辅助，类型永远以文字出现。
+    private func dotColor(_ category: BeansDiagnosticEntry.Category) -> Color {
+        switch category {
+        case .page: return .beansAmber
+        case .tap: return .blue
+        case .network: return .green
+        case .error: return .red
+        }
     }
 }
 
@@ -534,17 +574,16 @@ struct BeansDiagnosticDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                field("时间", timeText)
-                field("类型", entry.category.title)
-                field("内容", entry.content)
-                if let position = entry.position {
-                    field("位置", position)
+            SettingsCatalogGroup {
+                VStack(alignment: .leading, spacing: 14) {
+                    field("时间", timeText)
+                    field("类型", entry.category.title)
+                    field("内容", entry.content)
+                    if let position = entry.position {
+                        field("位置", position)
+                    }
                 }
-            }
-            .padding(16)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.vertical, 16)
             }
             .padding(16)
         }
@@ -552,9 +591,13 @@ struct BeansDiagnosticDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("复制") {
+                Button {
                     UIPasteboard.general.string = copyText
                     ToastCenter.shared.show("已复制")
+                } label: {
+                    Text("复制")
+                        .font(BeansFont.appFont(13, .medium))
+                        .foregroundStyle(Color.beansAmber)
                 }
             }
         }
@@ -566,7 +609,7 @@ struct BeansDiagnosticDetailView: View {
                 .font(BeansFont.appFont(12))
                 .foregroundStyle(Color.beansComment)
             Text(value)
-                .font(BeansFont.appFont(13))
+                .font(BeansFont.appFont(15))
                 .foregroundStyle(Color.beansLabel)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
