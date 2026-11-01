@@ -584,7 +584,9 @@ extension VideoDetailViewModel {
               !entry.isCurrent
         else { return }
 
-        let shouldResumePlayback = currentPlaybackIntent()
+        // 在播放列表里主动点一首就是“开始播放”，不能继承上一首暂停/播完时的意图，
+        // 否则新播放器会停在 0% 等用户再按一次播放。
+        let shouldResumePlayback = true
         switch entry.target {
         case let .page(page):
             beginVideoListenAdvance(
@@ -689,10 +691,6 @@ extension VideoDetailViewModel {
            videoListenQueueEntries.count > 1 {
             videoListenQueueSession.errorMessage = nil
             videoListenQueueSession.hasMore = true
-            if case .exhausted = videoListenQueueSession.continuation,
-               case .entryList = videoListenQueueSession.source {
-                videoListenQueueSession.continuation = .related
-            }
             if let currentEntry = videoListenQueueEntries.first(where: \.isCurrent) {
                 await loadMoreVideoListenQueueIfNeeded(current: currentEntry)
             }
@@ -821,9 +819,10 @@ extension VideoDetailViewModel {
             ) else { return }
 
             if !completedHasMore {
-                // 这个 UP 的投稿追完了：保留已追加部分，后续再退回相关推荐。
-                videoListenQueueSession.continuation = .related
-                videoListenQueueSession.hasMore = true
+                // 只续同一个 UP 的投稿，不掺相关推荐（掺进来就是跳歌）。
+                // 已经追加的页面保留；本次没有新内容时说明确实到这个 UP 的末尾了。
+                videoListenQueueSession.continuation = .exhausted
+                videoListenQueueSession.hasMore = false
                 PlayerMetricsLog.record(
                     .network,
                     metricsID: detail.bvid,
@@ -831,10 +830,9 @@ extension VideoDetailViewModel {
                     message: "listenQueue entryList uploaderExhausted added=\(collected.count) total=\(videoListenQueueSession.videos.count)"
                 )
                 if collected.isEmpty {
-                    await loadMoreEntryListRelatedContinuation()
-                } else {
-                    updateVideoListenRemoteNavigationAvailability()
+                    playbackFallbackMessage = "已到该 UP 的投稿末尾"
                 }
+                updateVideoListenRemoteNavigationAvailability()
                 return
             }
 

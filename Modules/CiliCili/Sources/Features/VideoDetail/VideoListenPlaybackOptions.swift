@@ -263,7 +263,7 @@ enum VideoListenQueuePaginationDirection: String, Sendable {
 }
 
 /// 入口列表本身没有游标（`entryList` 只是一段快照）。
-/// 到队尾后必须显式续页：UP 主投稿按页追加，追不到或追完了再退回相关推荐。
+/// 到队尾后只按同一个 UP 的投稿页显式续页，不掺相关推荐。
 enum VideoListenQueueContinuation: Equatable, Sendable {
     case uploader(mid: Int, order: UploaderVideoOrder, anchored: Bool)
     case related
@@ -303,7 +303,7 @@ struct VideoListenQueueSession: Equatable {
         let continuation: VideoListenQueueContinuation
         switch context.continuation {
         case .uploader(let mid, let order):
-            continuation = mid > 0 ? .uploader(mid: mid, order: order, anchored: false) : .related
+            continuation = mid > 0 ? .uploader(mid: mid, order: order, anchored: false) : .exhausted
         case .related:
             continuation = .related
         case nil:
