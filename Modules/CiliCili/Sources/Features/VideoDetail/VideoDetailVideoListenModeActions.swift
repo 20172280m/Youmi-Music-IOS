@@ -186,6 +186,7 @@ extension VideoDetailViewModel {
         let shouldResumePlayback = currentPlaybackIntent()
             || (isEnabled && stablePlayerViewModel?.hasPresentedPlayback != true)
         let playbackRate = stablePlayerViewModel?.playbackRate ?? .x10
+        PlayerMetricsLog.notice("listenMode enabled=\(isEnabled) resume=\(shouldResumePlayback)")
         cancelHLSRenditionPrebuildTask()
         cancelSeekWarmups()
         playbackContentMode = nextMode

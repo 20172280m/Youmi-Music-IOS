@@ -689,7 +689,7 @@ enum PlayerMetricsLog {
     }
 
     nonisolated static func notice(_ message: String) {
-        logger.notice("\(message, privacy: .public)")
+        NSLog("[ccbili] %@", message)
     }
 
     @MainActor
