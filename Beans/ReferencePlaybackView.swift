@@ -48,6 +48,7 @@ struct ReferencePlaybackView: View {
     @AppStorage("beans.showSongVIPBadge") private var showSongVIPBadge = true
     @AppStorage("beans.appleMusic.showLyricPreview") private var showLyricPreview = true
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    @AppStorage(BeansImmersiveDetailHeader.enabledKey) private var immersiveDetailEnabled = true
     @State private var lyricCenters: [UUID: CGFloat] = [:]
     @State private var focusedLyricID: UUID?
     @State private var selectedLyricID: UUID?
@@ -291,6 +292,11 @@ struct ReferencePlaybackView: View {
                 if downloadFeatureUnlocked {
                     Button("下载歌曲", action: onDownload)
                 }
+                // 与经典/黑胶播放器的「更多」同一句、同一个设置。
+                Button(immersiveDetailEnabled ? "切换到普通界面" : "切换到沉浸详情界面") {
+                    immersiveDetailEnabled.toggle()
+                    BeansHaptics.select()
+                }
                 Button("播放器设置", action: onPlayerSettings)
                 Button("软件音量") {
                     showSoftwareVolume = true
@@ -434,6 +440,11 @@ struct ReferencePlaybackView: View {
                     if downloadFeatureUnlocked {
                         Button("下载歌曲", action: onDownload)
                     }
+                    // 与经典/黑胶播放器的「更多」同一句、同一个设置。
+                    Button(immersiveDetailEnabled ? "切换到普通界面" : "切换到沉浸详情界面") {
+                        immersiveDetailEnabled.toggle()
+                        BeansHaptics.select()
+                    }
                     Button("播放器设置", action: onPlayerSettings)
                     Button("软件音量") {
                         showSoftwareVolume = true
@@ -532,6 +543,11 @@ struct ReferencePlaybackView: View {
                 customCoverActions
                 if downloadFeatureUnlocked {
                     Button("下载歌曲", action: onDownload)
+                }
+                // 与经典/黑胶播放器的「更多」同一句、同一个设置。
+                Button(immersiveDetailEnabled ? "切换到普通界面" : "切换到沉浸详情界面") {
+                    immersiveDetailEnabled.toggle()
+                    BeansHaptics.select()
                 }
                 Button("播放器设置", action: onPlayerSettings)
                 Button("软件音量") {
