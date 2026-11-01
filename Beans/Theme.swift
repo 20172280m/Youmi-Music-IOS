@@ -44,6 +44,12 @@ extension UIColor {
     }
     /// 压在胶囊玻璃上的着色字：胶囊底比页面亮一档，深色下直接用主题色只剩 3.75:1，
     /// 所以只在这一处把深色主题色提亮 20%（实测 4.7:1），浅色不变。
+    /// 文字态的红（Colo 2026-11-01 定值）：压在白底、卡片 #2C2C2E、导航栏玻璃 #3B3B3D 上都要 ≥4.5。
+    /// 只用于「红字压在底上」；红做实底配白字仍走 beansAmber 那一档，两套不互串。
+    static let beansRedText = beansDynamic(
+        light: UIColor(red: 201 / 255, green: 41 / 255, blue: 41 / 255, alpha: 1),   // #C92929
+        dark: UIColor(red: 255 / 255, green: 143 / 255, blue: 145 / 255, alpha: 1)   // #FF8F91
+    )
     static var beansAmberOnGlass: UIColor {
         if let custom = ThemeStore.shared.customAccentHex, let c = UIColor(hex: custom) {
             return beansDynamic(light: c.shaded(0.25), dark: lifted(c, by: 0.2))
@@ -95,6 +101,8 @@ extension Color {
     static var beansAmber: Color { Color(uiColor: .beansAmber) }
     /// 胶囊选中态的文字与描边用色（深色比 beansAmber 亮 20%）。
     static var beansAmberOnGlass: Color { Color(uiColor: .beansAmberOnGlass) }
+    /// 红字统一用色：完成、复制、清空这类「红色文字」都取这一枚。
+    static var beansRedText: Color { Color(uiColor: .beansRedText) }
     static let beansSage = Color(uiColor: .beansSage)
     static let beansGlassFill = Color(uiColor: .beansGlassFill)
     /// 当前配色主题的高亮色（播放器进度点 / 光斑 / 歌词高亮等）

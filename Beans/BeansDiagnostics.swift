@@ -395,6 +395,7 @@ struct BeansDiagnosticsSettingsView: View {
                         Button(role: .destructive) { showClearConfirm = true } label: {
                             Label("清空本地诊断日志", systemImage: "trash")
                                 .font(BeansFont.appFont(13, .medium))
+                                .foregroundStyle(Color.beansRedText)
                         }
                     }
                     .padding(16)
@@ -419,7 +420,14 @@ struct BeansDiagnosticsSettingsView: View {
             }
             .navigationTitle("诊断与日志")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button { dismiss() } label: {
+                        Text("完成")
+                            .foregroundStyle(Color.beansRedText)
+                    }
+                }
+            }
         }
         .sheet(isPresented: $showShare) { ShareSheet(items: [diagnostics.exportLogURL()]) }
         .onAppear { BeansDiagnostics.shared.recordPage("诊断与日志") }
@@ -661,7 +669,7 @@ struct BeansDiagnosticDetailView: View {
                 } label: {
                     Text("复制")
                         .font(BeansFont.appFont(13, .medium))
-                        .foregroundStyle(Color.beansAmber)
+                        .foregroundStyle(Color.beansRedText)
                 }
             }
         }
