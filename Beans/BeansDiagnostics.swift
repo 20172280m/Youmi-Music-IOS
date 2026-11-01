@@ -412,7 +412,9 @@ struct BeansDiagnosticsSettingsView: View {
         .sheet(isPresented: $showShare) { ShareSheet(items: [diagnostics.exportLogURL()]) }
         .onAppear { BeansDiagnostics.shared.recordPage("诊断与日志") }
         .confirmationDialog("确定清空本地诊断日志？", isPresented: $showClearConfirm, titleVisibility: .visible) {
-            Button("清空", role: .destructive) { diagnostics.recordTap("清空诊断日志") ; diagnostics.clear() }
+            // 清空本身不记：记录是异步入列，清完再入列会剩一条「点击：清空诊断日志」，
+            // 用户就永远看不到「还没有诊断记录」那段空态。
+            Button("清空", role: .destructive) { diagnostics.clear() }
             Button("取消", role: .cancel) {}
         }
     }
