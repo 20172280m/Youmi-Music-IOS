@@ -686,10 +686,14 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                             persistentMoreControlsButton(contentInsets: videoInsets)
                         }
 
+                        // 正式包不出这块调试浮层：它开起来会盖住详情页自己的按钮，连返回都点不到。
+                        // 只在调试构建里按设置开关决定是否显示。
+                        #if DEBUG
                         if runtimeSettings.playerPerformanceOverlayEnabled {
                             performanceOverlay(contentInsets: videoInsets, in: proxy.size)
                                 .zIndex(8)
                         }
+                        #endif
 
                         let rotationReportMetricsID = overlaySnapshot.historyVideo.bvid
                         if runtimeSettings.videoRotationFrameReportOverlayEnabled,
