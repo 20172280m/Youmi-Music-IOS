@@ -43,8 +43,8 @@ final class BeansDiagnostics: ObservableObject {
         lock.unlock()
 
         UIDevice.current.isBatteryMonitoringEnabled = true
+        // 启动只算一次「页面进入」，不再额外记一条 action，否则列表里会出现一行「点击 应用启动」。
         route("应用启动")
-        recordAction("应用启动")
         startPerformanceSampler()
     }
 
@@ -71,8 +71,9 @@ final class BeansDiagnostics: ObservableObject {
     }
 
     /// 点击：走 action= 这条线，列表里归到「点击」，只记按钮名，不记输入内容。
+    /// 列表里已经有「点击」这个类型词，内容不再重复加前缀。
     func recordTap(_ name: String, file: String = #fileID, line: Int = #line, function: String = #function) {
-        recordAction("点击：\(name)", file: file, line: line, function: function)
+        recordAction(name, file: file, line: line, function: function)
     }
 
     func recordNetwork(url: URL, method: String, status: Int? = nil, duration: TimeInterval? = nil, error: String? = nil,
