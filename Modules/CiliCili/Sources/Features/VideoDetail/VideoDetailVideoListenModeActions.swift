@@ -1143,6 +1143,7 @@ extension VideoDetailViewModel {
     ) {
         guard !VideoListenQueueBuilder.representsSameVideo(video, detail) else { return }
         if video.isPGCEpisode {
+            videoListenPendingDisplay = video
             selectPgcEpisode(video)
             return
         }
@@ -1151,6 +1152,8 @@ extension VideoDetailViewModel {
         let sourceCID = selectedCID
         let queueGeneration = videoListenQueueSession.generation
         let identity = videoListenLoadIdentity(for: video)
+        // 详情要等网络回来，头部先按队列里这一条的标题封面显示，避免停在上一条上
+        videoListenPendingDisplay = video
         videoListenContentSwitchTask?.cancel()
         videoListenContentSwitchTask = Task(priority: .userInitiated) { @MainActor [weak self] in
             guard let self else { return }
@@ -1173,6 +1176,7 @@ extension VideoDetailViewModel {
             } catch {
                 guard !Task.isCancelled else { return }
                 self.videoListenContentSwitchTask = nil
+                self.videoListenPendingDisplay = nil
                 self.playbackFallbackMessage = "下一项载入失败：\(error.localizedDescription)"
                 PlayerMetricsLog.record(
                     .network,
@@ -1211,6 +1215,7 @@ extension VideoDetailViewModel {
         isPlaybackInvalidatedForNavigation = false
         cancelBackgroundTasks()
         detail = video
+        videoListenPendingDisplay = nil
         let pages = video.pages ?? []
         selectedCID = direction == .previous
             ? (pages.last?.cid ?? video.cid)

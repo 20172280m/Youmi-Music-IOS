@@ -10,7 +10,10 @@ struct VideoDetailListenArtworkPanel: View {
     @ObservedObject var viewModel: VideoDetailViewModel
 
     var body: some View {
-        VideoListenArtworkLayer(video: viewModel.detail, isLandscape: false)
+        // 队列里刚点的那一首：详情还在路上时先用队列里的标题和封面占位，
+        // 不然头部会停在上一条上，等一两秒才换过来。
+        VideoListenArtworkLayer(video: viewModel.videoListenPendingDisplay ?? viewModel.detail,
+                                isLandscape: false)
             .allowsHitTesting(false)
     }
 }

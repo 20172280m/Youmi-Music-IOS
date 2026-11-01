@@ -57,6 +57,8 @@ final class VideoDetailViewModel: ObservableObject {
     var videoListenQueueTask: Task<Void, Never>?
     var videoListenQueueTaskGeneration = 0
     var videoListenContentSwitchTask: Task<Void, Never>?
+    /// 队列里点了、还没加载完的那一首。头部标题和封面先用它顶上，别停在上一首。
+    @Published var videoListenPendingDisplay: VideoItem?
     @Published var videoListenSleepTimerOption: VideoListenSleepTimerOption = .off
     @Published var videoListenSleepTimerDeadline: Date?
     var videoListenSleepTimerTask: Task<Void, Never>?

@@ -10,6 +10,7 @@ extension VideoDetailViewModel {
         isPlaybackInvalidatedForNavigation = false
         cancelBackgroundTasks()
         detail = video
+        videoListenPendingDisplay = nil
         selectedCID = video.cid ?? video.pages?.first?.cid
         hasResolvedDetailMetadata = true
         manuallySelectedPageCID = nil
