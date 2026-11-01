@@ -452,6 +452,8 @@ struct ArtistHomeSheet: View {
                                       onPlayAll: hotSongs.isEmpty ? nil : {
                                           player.play(songs: displayedHotSongs, startAt: 0)
                                       },
+                                      playMode: hotSongs.isEmpty ? nil : player.playMode,
+                                      onTogglePlayMode: { player.togglePlayMode() },
                                       playAllTint: theme.accent.highlight,
                                       textBackdrop: headerTextBackdrop,
                                       onPalette: { tint in

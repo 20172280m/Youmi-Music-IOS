@@ -22,6 +22,9 @@ struct BeansImmersiveDetailHeader: View {
     var onHeightChange: ((CGFloat) -> Void)?
     var onSubtitle: (() -> Void)?
     var onPlayAll: (() -> Void)?
+    /// 给了就在「播放全部」右侧加一枚 44×44 的模式按钮，四档循环，和播放页那枚一个行为。
+    var playMode: PlayMode?
+    var onTogglePlayMode: (() -> Void)?
     /// 播放全部一律用主题色；封面取色只给渐变底和阴影，不进按钮。
     var playAllTint: Color?
     /// 文字后面没有渐变兜底、直接压着壁纸时（歌手主页），给副信息垫一层固定底。
@@ -80,24 +83,29 @@ struct BeansImmersiveDetailHeader: View {
                     .accessibilityIdentifier("beans.immersive.metadata")
             }
             if let onPlayAll {
-                Button(action: onPlayAll) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "play.fill")
-                        Text("播放全部").font(BeansFont.appFont(16, .semibold))
+                HStack(spacing: 12) {
+                    Button(action: onPlayAll) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "play.fill")
+                            Text("播放全部").font(BeansFont.appFont(16, .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        // 白字压实底：填充按 4.65 反算，不再乘 0.9 透明度
+                        //（那一层会透出下面的渐变，白字实测只剩 3.4:1）。
+                        .background(AppThemeContrastTokens.filledBackground(from: playAllTint ?? palette),
+                                    in: Capsule())
+                        .foregroundStyle(.white)
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    // 白字压实底：填充按 4.65 反算，不再乘 0.9 透明度
-                    //（那一层会透出下面的渐变，白字实测只剩 3.4:1）。
-                    .background(AppThemeContrastTokens.filledBackground(from: playAllTint ?? palette),
-                                in: Capsule())
-                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("beans.immersive.playAll")
+                    if let playMode, let onTogglePlayMode {
+                        playModeButton(playMode, action: onTogglePlayMode)
+                    }
                 }
-                .buttonStyle(.plain)
                 // 按钮比文字更早退场：它的下沿比副信息低，切口扫到它时必须是透明的。
                 .opacity(Double(max(0, 1 - collapseProgress / 0.22)))
                 .allowsHitTesting(collapseProgress < 0.22)
-                .accessibilityIdentifier("beans.immersive.playAll")
             }
             if let descriptionText, !descriptionText.isEmpty {
                 Button {
@@ -125,6 +133,27 @@ struct BeansImmersiveDetailHeader: View {
         .onChange(of: paletteOverride) { _, newValue in
             if let newValue { palette = newValue }
         }
+    }
+
+    /// 播放模式：和播放页那枚同一个行为、同一个状态，不另外造控件。
+    /// 实底圆片而不是毛玻璃：头部底色从封面取，深浅不可控，实底保证任何封面色上都读得出。
+    private func playModeButton(_ mode: PlayMode, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            BeansHaptics.select()
+        } label: {
+            Image(systemName: mode.icon)
+                .font(.system(size: 17, weight: .semibold))
+                // 只有随机态亮主题色，沿用播放页的既有约定。
+                .foregroundStyle(mode == .shuffle ? Color.beansRedText : Color.beansLabel)
+                .frame(width: 44, height: 44)
+                .background(Circle().fill(Color.beansCard.opacity(0.92)))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("播放模式：\(mode.title)")
+        .accessibilityHint("点按切换播放模式")
+        .accessibilityIdentifier("beans.immersive.playMode")
     }
 
     /// 浅色封面在深色模式下把底色压暗一档，保证白字对比度；深色封面维持原来的 0.25。

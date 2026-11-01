@@ -37,6 +37,8 @@ struct PlayerView: View {
     @State private var showCustomCoverPicker = false
     @State private var showSoftwareVolume = false
     @AppStorage(BeansBackendSettings.downloadUnlockKey) private var downloadFeatureUnlocked = false
+    /// 「更多」里的显示切换和设置页那枚开关是同一个键，两处改任一处另一处立刻同步。
+    @AppStorage(BeansImmersiveDetailHeader.enabledKey) private var immersiveDetailEnabled = true
     /// 下载完成后直接弹原生分享（用户自行选择保存或转发）
     @State private var shareFile: ShareFileItem?
     @State private var sharedFileURL: URL?
@@ -1082,6 +1084,10 @@ struct PlayerView: View {
                 Button("下载歌曲") {
                     showDownloadPicker = true
                 }
+            }
+            Button(immersiveDetailEnabled ? "切换到普通界面" : "切换到沉浸详情界面") {
+                immersiveDetailEnabled.toggle()
+                BeansHaptics.select()
             }
             Button("播放器设置") {
                 openPlayerSettings()
