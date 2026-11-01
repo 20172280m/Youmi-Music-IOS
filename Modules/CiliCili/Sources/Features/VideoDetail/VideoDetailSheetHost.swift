@@ -9,8 +9,13 @@ private struct VideoDetailSheetHostModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: sheetRouteBinding) { route in
-                switch route {
+            // 路由 sheet 单独挂在背景节点：与下面四个 `.sheet(isPresented:)`
+            // 同节点串联时，SwiftUI 会只保留一个 presentation host，route 永远不弹。
+            .background {
+                Color.clear
+                    .allowsHitTesting(false)
+                    .sheet(item: sheetRouteBinding) { route in
+                        switch route {
                 case .commentThread(let presentation):
                     let comment = presentation.rootComment
                     if let replyID = presentation.secondaryID,
@@ -44,16 +49,19 @@ private struct VideoDetailSheetHostModifier: ViewModifier {
                             referer: videoReferer
                         )
                     }
-                case .moreControls(let presentation):
-                    SurfaceOnlyMoreControlsSheet(
-                        detailViewModel: viewModel,
-                        viewModel: presentation.playerViewModel,
-                        qualityStore: viewModel.playbackRenderStore.qualityControlStore,
-                        selectPlayVariant: { viewModel.selectPlayVariant($0) },
-                        onToggleDanmaku: { viewModel.toggleDanmaku() },
-                        close: { sheetRouteBinding.wrappedValue = nil }
-                    )
-                }
+                        case .moreControls(let presentation):
+                            SurfaceOnlyMoreControlsSheet(
+                                detailViewModel: viewModel,
+                                viewModel: presentation.playerViewModel,
+                                qualityStore: viewModel.playbackRenderStore.qualityControlStore,
+                                selectPlayVariant: { viewModel.selectPlayVariant($0) },
+                                onToggleDanmaku: { viewModel.toggleDanmaku() },
+                                close: { sheetRouteBinding.wrappedValue = nil }
+                            )
+                            .onAppear { VideoDetailDebugProbe.record("moreSheetAppear") }
+                            .onDisappear { VideoDetailDebugProbe.record("moreSheetDisappear") }
+                        }
+                    }
             }
             .sheet(isPresented: sheetState.isShowingFavoriteFolders) {
                 VideoDetailFavoriteFolderSheetHost(

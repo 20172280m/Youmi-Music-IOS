@@ -720,6 +720,31 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                     .allowsHitTesting(!isBareSurfaceTransitionActive)
                 }
 
+                // 控件自动隐藏后 SwiftUI 会把播放/更多/全屏移出无障碍树。
+                // 用透明 UIKit 元素兜底：只暴露无障碍、不参与触摸，读屏仍能激活。
+                if !playbackControlsVisibility.isVisible,
+                   !isBareSurfaceTransitionActive {
+                    VideoDetailPlayerAccessibilityMirror(
+                        isPlaying: surfaceState.isPlaying,
+                        isFullscreen: isLandscape || isPortraitFullscreen,
+                        onTogglePlayback: {
+                            guard !viewModel.isTerminated else { return }
+                            viewModel.togglePlayback()
+                        },
+                        onShowMoreControls: openMoreControls,
+                        onToggleFullscreen: {
+                            if isLandscape || isPortraitFullscreen {
+                                onExitFullscreen()
+                            } else {
+                                onRequestFullscreen()
+                            }
+                        }
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .zIndex(6)
+                }
+
                 if showsCenterPlaybackControl {
                     centerPlaybackControl
                         .zIndex(5)
@@ -971,24 +996,28 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                 )
             }
         ) {
-            playbackControlsVisibility.cancelAutoHide()
-            if isLandscape {
-                withAnimation(.default) {
-                    isMoreControlsPresented = true
-                }
-            } else {
-                let requestID = UUID()
-                portraitMoreControlsRequestID = requestID
-                onShowMoreControls {
-                    guard portraitMoreControlsRequestID == requestID else { return }
-                    portraitMoreControlsRequestID = nil
-                }
-            }
+            openMoreControls()
         }
         .frame(width: controlMetrics.controlHeight, height: controlMetrics.controlHeight)
         .frame(width: 44, height: controlMetrics.controlHeight, alignment: .trailing)
         .biliPlayerExpandedHitTarget(horizontal: 0, vertical: 8)
         .accessibilityLabel("更多播放设置")
+    }
+
+    private func openMoreControls() {
+        playbackControlsVisibility.cancelAutoHide()
+        if isLandscape {
+            withAnimation(.default) {
+                isMoreControlsPresented = true
+            }
+        } else {
+            let requestID = UUID()
+            portraitMoreControlsRequestID = requestID
+            onShowMoreControls {
+                guard portraitMoreControlsRequestID == requestID else { return }
+                portraitMoreControlsRequestID = nil
+            }
+        }
     }
 
     private func persistentMoreControlsButton(contentInsets: EdgeInsets) -> some View {
@@ -3207,5 +3236,90 @@ private struct SurfaceOnlyRateChoicesPage: View {
         .navigationTitle("倍速")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.automatic, for: .navigationBar)
+    }
+}
+
+/// 控件隐藏期间的无障碍兜底：三个透明 UIKit 元素覆盖播放/更多/全屏，
+/// 不参与 hit-testing，VoiceOver 激活时直接执行对应动作。
+private struct VideoDetailPlayerAccessibilityMirror: UIViewRepresentable {
+    let isPlaying: Bool
+    let isFullscreen: Bool
+    let onTogglePlayback: () -> Void
+    let onShowMoreControls: () -> Void
+    let onToggleFullscreen: () -> Void
+
+    func makeUIView(context: Context) -> VideoDetailPlayerAccessibilityMirrorView {
+        VideoDetailPlayerAccessibilityMirrorView()
+    }
+
+    func updateUIView(_ view: VideoDetailPlayerAccessibilityMirrorView, context: Context) {
+        view.update(
+            isPlaying: isPlaying,
+            isFullscreen: isFullscreen,
+            onTogglePlayback: onTogglePlayback,
+            onShowMoreControls: onShowMoreControls,
+            onToggleFullscreen: onToggleFullscreen
+        )
+    }
+}
+
+private final class VideoDetailPlayerAccessibilityMirrorView: UIView {
+    private lazy var playbackElement = VideoDetailPlayerAccessibilityMirrorElement(accessibilityContainer: self)
+    private lazy var moreElement = VideoDetailPlayerAccessibilityMirrorElement(accessibilityContainer: self)
+    private lazy var fullscreenElement = VideoDetailPlayerAccessibilityMirrorElement(accessibilityContainer: self)
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+        isOpaque = false
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
+        playbackElement.accessibilityIdentifier = "ui.player.playback.toggle"
+        moreElement.accessibilityIdentifier = "ui.player.more"
+        fullscreenElement.accessibilityIdentifier = "ui.player.fullscreen.toggle"
+        [playbackElement, moreElement, fullscreenElement].forEach {
+            $0.accessibilityTraits = .button
+        }
+        accessibilityElements = [playbackElement, moreElement, fullscreenElement]
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let height = min(44, max(1, bounds.height))
+        let y = max(0, bounds.height - height - 10)
+        let right = max(0, bounds.width - 44)
+        playbackElement.accessibilityFrameInContainerSpace = CGRect(x: 10, y: y, width: 44, height: height)
+        moreElement.accessibilityFrameInContainerSpace = CGRect(x: max(0, right - 44), y: y, width: 44, height: height)
+        fullscreenElement.accessibilityFrameInContainerSpace = CGRect(x: right, y: y, width: 44, height: height)
+    }
+
+    func update(
+        isPlaying: Bool,
+        isFullscreen: Bool,
+        onTogglePlayback: @escaping () -> Void,
+        onShowMoreControls: @escaping () -> Void,
+        onToggleFullscreen: @escaping () -> Void
+    ) {
+        playbackElement.accessibilityLabel = isPlaying ? "暂停" : "播放"
+        moreElement.accessibilityLabel = "更多播放设置"
+        fullscreenElement.accessibilityLabel = isFullscreen ? "退出全屏" : "全屏"
+        playbackElement.activation = onTogglePlayback
+        moreElement.activation = onShowMoreControls
+        fullscreenElement.activation = onToggleFullscreen
+    }
+}
+
+private final class VideoDetailPlayerAccessibilityMirrorElement: UIAccessibilityElement {
+    var activation: (() -> Void)?
+
+    override func accessibilityActivate() -> Bool {
+        guard let activation else { return false }
+        activation()
+        return true
     }
 }

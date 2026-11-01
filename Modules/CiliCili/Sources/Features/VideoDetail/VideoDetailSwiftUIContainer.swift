@@ -917,6 +917,9 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
             hostingController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         hostingController.didMove(toParent: self)
+        let controlTraceLabel = UILabel()
+        view.addSubview(controlTraceLabel)
+        VideoDetailDebugProbe.install(controlTraceLabel)
 #if DEBUG
         rotationDiagnosticsAccessibilityView.isAccessibilityElement = true
         rotationDiagnosticsAccessibilityView.accessibilityIdentifier = "ui.videoDetail.rotationDiagnostics"
@@ -999,7 +1002,11 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
     }
 
     func presentPlayerMoreControls(onDismiss: @escaping () -> Void) {
-        guard let player = activePlayerViewModel else {
+        let player = activePlayerViewModel ?? contentModel.surfacePlayerViewModel
+        VideoDetailDebugProbe.record(
+            "presentMore active=\(activePlayerViewModel != nil) surface=\(contentModel.surfacePlayerViewModel != nil) resolved=\(player != nil)"
+        )
+        guard let player else {
             onDismiss()
             return
         }

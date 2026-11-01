@@ -16,6 +16,8 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
     private var rotationWatchdogTask: Task<Void, Never>?
     private var rotationGeneration = 0
     private var didPrepareForDismantle = false
+    private var fullscreenFallbackTask: Task<Void, Never>?
+    private var fullscreenRequestGeneration = 0
 
     init(
         initialVideo: VideoItem,
@@ -130,6 +132,7 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        VideoDetailDebugProbe.record("bridgeWillDisappear")
         isViewActive = false
         contentController.dismissPlayerMoreControls()
         recoverInterruptedRotationIfNeeded(reason: "viewWillDisappear")
@@ -177,6 +180,7 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         rotationGeneration += 1
         let generation = rotationGeneration
         cancelRotationTasks()
+        VideoDetailDebugProbe.record("viewWillTransition toLandscape=\(toLandscape) size=\(Int(size.width))x\(Int(size.height))")
         rotationCoordinator.beginSystemTransition(toLandscape: toLandscape)
         contentController.beginSystemRotation(toLandscape: toLandscape)
         contentController.markRotationStarted(toLandscape: toLandscape)
@@ -201,35 +205,80 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         })
     }
 
+    private var resolvedWindowScene: UIWindowScene? {
+        UIApplication.shared.playbackDetailForegroundWindowScene ?? view.window?.windowScene
+    }
+
     private func requestFullscreen() {
+        fullscreenFallbackTask?.cancel()
+        fullscreenFallbackTask = nil
+        fullscreenRequestGeneration &+= 1
+        let generation = fullscreenRequestGeneration
+
         if contentController.isPortraitVideo {
             rotationCoordinator.setPortraitFullscreen(true)
             updateOrientationLock()
             setNeedsStatusBarAppearanceUpdate()
             setNeedsUpdateOfHomeIndicatorAutoHidden()
+            VideoDetailDebugProbe.record("reqFS portraitVideo")
             return
         }
-        let scene = view.window?.windowScene
+        let scene = resolvedWindowScene
         rotationCoordinator.allowLandscape(in: scene)
         let target = rotationPolicy.preferredLandscapeInterfaceOrientation(
             currentInterfaceOrientation: scene?.effectiveGeometry.interfaceOrientation,
             deviceOrientation: UIDevice.current.orientation
         )
-        rotationCoordinator.requestGeometryUpdate(to: target, in: scene)
+        let submitted = rotationCoordinator.requestGeometryUpdate(to: target, in: scene)
+        VideoDetailDebugProbe.record(
+            "reqFS scene=\(scene != nil) state=\(scene?.activationState.rawValue ?? -1) orient=\(scene?.effectiveGeometry.interfaceOrientation.rawValue ?? -1) mask=\(target.rawValue) supported=\(AppOrientationLock.supportedOrientations.rawValue) submitted=\(submitted)"
+        )
+        scheduleFullscreenFallback(generation: generation)
+    }
+
+    /// 几何请求被系统静默拒绝时的兜底：按钮必须有可见结果。
+    /// 只有当系统没有开始任何转场、且仍未进入横屏时才退回竖屏全屏。
+    private func scheduleFullscreenFallback(generation: Int) {
+        fullscreenFallbackTask?.cancel()
+        fullscreenFallbackTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self,
+                  !Task.isCancelled,
+                  self.fullscreenRequestGeneration == generation,
+                  self.isViewActive,
+                  !self.rotationCoordinator.isLandscape,
+                  !self.rotationCoordinator.isPortraitFullscreen,
+                  !self.rotationCoordinator.isTransitioning
+            else { return }
+            let scene = self.resolvedWindowScene
+            AppOrientationLock.update(to: .portrait, in: scene)
+            self.rotationCoordinator.setPortraitFullscreen(true)
+            self.setNeedsStatusBarAppearanceUpdate()
+            self.setNeedsUpdateOfHomeIndicatorAutoHidden()
+            self.contentController.recoverStableLayout()
+            VideoDetailDebugProbe.record(
+                "fsFallback portraitFullscreen geomErr=\(AppOrientationLock.lastGeometryUpdateError ?? "nil")"
+            )
+        }
     }
 
     private func requestExitFullscreen() {
+        fullscreenFallbackTask?.cancel()
+        fullscreenFallbackTask = nil
+        fullscreenRequestGeneration &+= 1
         if rotationCoordinator.isPortraitFullscreen {
             rotationCoordinator.setPortraitFullscreen(false)
             contentController.recoverStableLayout()
             updateOrientationLock()
             setNeedsStatusBarAppearanceUpdate()
             setNeedsUpdateOfHomeIndicatorAutoHidden()
+            VideoDetailDebugProbe.record("reqExitFS portrait")
             return
         }
-        let scene = view.window?.windowScene
+        let scene = resolvedWindowScene
         rotationCoordinator.allowLandscape(in: scene)
-        rotationCoordinator.requestGeometryUpdate(to: .portrait, in: scene)
+        let submitted = rotationCoordinator.requestGeometryUpdate(to: .portrait, in: scene)
+        VideoDetailDebugProbe.record("reqExitFS submitted=\(submitted) scene=\(scene != nil)")
     }
 
     private func handleBackButton() {
@@ -357,6 +406,8 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         rotationCompletionTask = nil
         rotationWatchdogTask?.cancel()
         rotationWatchdogTask = nil
+        fullscreenFallbackTask?.cancel()
+        fullscreenFallbackTask = nil
     }
 
     private func restoreSystemBackGestures() {
