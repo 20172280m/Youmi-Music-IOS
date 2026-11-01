@@ -1649,7 +1649,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.updateNowPlaying()
             } else {
                 self.advance()
-                BeansLogger.shared.log("itemEnd advanced→\(self.currentIndex)/\(self.queue.count) song=\(self.currentSong?.title.prefix(12) ?? "-")", level: .info)
+                BeansLogger.shared.log("itemEnd advanced→\(self.currentIndex)/\(self.queue.count) song=\(self.currentSong?.name.prefix(12) ?? "-")", level: .info)
                 self.loadCurrent()
             }
         }
