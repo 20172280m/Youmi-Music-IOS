@@ -4,30 +4,25 @@ import SwiftUI
 ///
 /// 听视频时画面交给外部播放器，详情页不建播放器画面，这块原本留白。
 /// 这里用播放器同一份封面图层占位：尺寸沿用视频区，不改变下面的标题、
-/// UP 信息和相关推荐的位置；右下角给一个播放列表入口。
+/// UP 信息和相关推荐的位置。播放列表入口挂在容器最外层，和返回按钮同一层，
+/// 不再塞进播放器框里（框内命中测试拿不到点击）。
 struct VideoDetailListenArtworkPanel: View {
     @ObservedObject var viewModel: VideoDetailViewModel
-    let size: CGSize
-    @Binding var isListenQueuePresented: Bool
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VideoListenArtworkLayer(video: viewModel.detail, isLandscape: false)
-                .allowsHitTesting(false)
-
-            queueButton
-                .padding(.trailing, 12)
-                .padding(.bottom, 12)
-        }
-        .frame(width: size.width, height: size.height)
-        .clipped()
-        .accessibilityElement(children: .contain)
+        VideoListenArtworkLayer(video: viewModel.detail, isLandscape: false)
+            .allowsHitTesting(false)
     }
+}
 
-    private var queueButton: some View {
+/// 听视频封面面板上的「播放列表」入口。
+struct VideoDetailListenQueueButton: View {
+    let action: () -> Void
+
+    var body: some View {
         Button {
             Haptics.light()
-            isListenQueuePresented = true
+            action()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "list.bullet")
