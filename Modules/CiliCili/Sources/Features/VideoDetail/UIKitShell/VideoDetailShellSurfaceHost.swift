@@ -1190,7 +1190,10 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                 ? AnyView(VideoDetailFullscreenBatteryControl())
                 : nil,
             isFullscreenActive: context.configuration.isFullscreenActive,
-            controlsBottomLift: context.configuration.controlsBottomLift,
+            // 全屏时控件行贴得太底：按钮中心落在 Home Indicator 手势区里，手指
+            // 按下去先被系统吃掉。全屏（横屏铺满或竖屏铺满）统一抬 18pt。
+            controlsBottomLift: context.configuration.controlsBottomLift
+                + (isPortraitFullscreen || isLandscape ? 18 : 0),
             controlsHorizontalInset: context.configuration.controlsHorizontalInset,
             contentInsets: contentInsets,
             errorMessage: context.surfaceState.errorMessage
