@@ -3997,6 +3997,19 @@ final class PlayerStateViewModel: NSObject, ObservableObject {
         guard !isTerminated else { return }
         guard engine.hasMedia else { return }
         guard canActivatePlayback() else { return }
+        if playbackPhase == .ended {
+            // 播完停在结尾时再按播放：AVPlayer 停在末尾，play() 原地不动，
+            // 用户看到的就是「按播放没反应」。这里先回到片头再播。
+            if let time = engine.seek(toProgress: 0, duration: duration) {
+                updatePlaybackTime(time, force: true, countsAsNaturalPlayback: false)
+            }
+            PlayerMetricsLog.record(
+                .playbackRecovery,
+                metricsID: metricsID,
+                title: title,
+                message: "replayAfterEnd seek0"
+            )
+        }
         wantsAutoplay = true
         isPreparing = false
         isBuffering = !hasPresentedPlayback || isAwaitingAppBackgroundSurfaceRecovery
