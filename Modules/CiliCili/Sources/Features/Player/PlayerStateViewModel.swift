@@ -5058,6 +5058,13 @@ final class PlayerStateViewModel: NSObject, ObservableObject {
                 isBuffering = true
                 isPlaying = false
                 playbackPhase = .seeking
+            } else if wasPlaybackEnded, isAtPlaybackEnd {
+                // AVPlayer 停在片尾时也会报 paused。这里的 paused 是假暂停：
+                // 把 .ended 冲成 .paused，结尾回调就会被抢掉，听视频就不再接下一首。
+                isBuffering = false
+                isPlaying = false
+                wantsAutoplay = false
+                playbackPhase = .ended
             } else {
                 isBuffering = false
                 isPlaying = false
@@ -5070,6 +5077,12 @@ final class PlayerStateViewModel: NSObject, ObservableObject {
             isPlaying = false
             wantsAutoplay = false
             playbackPhase = .ended
+            PlayerMetricsLog.record(
+                .playbackRecovery,
+                metricsID: metricsID,
+                title: title,
+                message: "engineEnded wasEnded=\(wasPlaybackEnded) t=\(String(format: "%.2f", currentTime)) d=\(String(format: "%.2f", duration ?? -1))"
+            )
         case .failed(let message):
             cancelDeferredBufferingIndicator()
             isPreparing = false
