@@ -3993,11 +3993,22 @@ final class PlayerStateViewModel: NSObject, ObservableObject {
         return streamSourceForPreparation().withResumeTime(targetTime)
     }
 
+    /// 结尾状态不总落在 `.ended`：刷新一次快照后可能变成 `.paused`，
+    /// 所以按时间和总长再补一道判断，否则「播完再按播放」还是原地不动。
+    private var isAtPlaybackEnd: Bool {
+        if playbackPhase == .ended { return true }
+        let snapshot = engine.snapshot(durationHint: durationHint)
+        let effectiveDuration = snapshot.duration ?? duration
+        guard effectiveDuration.isFinite, effectiveDuration > 0.5 else { return false }
+        let time = snapshot.currentTime ?? currentTime
+        return time.isFinite && time >= effectiveDuration - 0.5
+    }
+
     private func startPreparedPlayback() {
         guard !isTerminated else { return }
         guard engine.hasMedia else { return }
         guard canActivatePlayback() else { return }
-        if playbackPhase == .ended {
+        if isAtPlaybackEnd {
             // 播完停在结尾时再按播放：AVPlayer 停在末尾，play() 原地不动，
             // 用户看到的就是「按播放没反应」。这里先回到片头再播。
             if let time = engine.seek(toProgress: 0, duration: duration) {
