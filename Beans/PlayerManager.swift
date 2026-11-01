@@ -1635,6 +1635,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         endObserver = NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main) { [weak self] _ in
             guard let self else { return }
+            BeansLogger.shared.log("itemEnd mode=\(self.playMode) index=\(self.currentIndex) queue=\(self.queue.count) isPlaying=\(self.isPlaying) source=\(self.currentSong?.source.rawValue ?? "-")", level: .info)
             if self.stopAfterCurrentSong {
                 self.stopAfterCurrentSong = false
                 self.pausePlayback()
@@ -1648,6 +1649,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.updateNowPlaying()
             } else {
                 self.advance()
+                BeansLogger.shared.log("itemEnd advanced→\(self.currentIndex)/\(self.queue.count) song=\(self.currentSong?.title.prefix(12) ?? "-")", level: .info)
                 self.loadCurrent()
             }
         }
