@@ -526,7 +526,7 @@ struct BeansDiagnosticsLogView: View {
                 }
                 .font(BeansFont.appFont(12, .medium))
                 .foregroundStyle(Color.beansComment)
-                Text(entry.content)
+                Text(summary(entry.content))
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansLabel)
                     .lineLimit(1)
@@ -538,7 +538,17 @@ struct BeansDiagnosticsLogView: View {
         }
         .buttonStyle(GlassPressButtonStyle())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("\(time)，\(entry.category.title)，\(entry.content)"))
+        .accessibilityLabel(Text("\(time)，\(entry.category.title)，\(summary(entry.content))"))
+    }
+
+    /// 类型已经在上一列，摘要里不重复那个前缀。
+    private func summary(_ content: String) -> String {
+        var text = content
+        if text.hasPrefix("route=") { text.removeFirst("route=".count) }
+        else if text.hasPrefix("action=") { text.removeFirst("action=".count) }
+        else if text.hasPrefix("error=") { text.removeFirst("error=".count) }
+        else if text.hasPrefix("network ") { text.removeFirst("network ".count) }
+        return text
     }
 
     /// 圆点只是辅助，类型永远以文字出现。
