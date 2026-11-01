@@ -688,6 +688,10 @@ enum PlayerMetricsLog {
         return try await operation()
     }
 
+    nonisolated static func notice(_ message: String) {
+        logger.notice("\(message, privacy: .public)")
+    }
+
     @MainActor
     static func record(
         _ event: PlayerPerformanceEvent.Kind, metricsID: String, title: String? = nil, message: String? = nil

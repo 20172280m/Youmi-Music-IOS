@@ -96,6 +96,7 @@ extension VideoDetailViewModel {
             self.scheduleVideoListenContinuationPreload()
         }
         playerViewModel.onPlaybackEnded = { [weak self, weak playerViewModel] in
+            PlayerMetricsLog.notice("listenEnd fired audioOnly=\(self?.playbackContentMode == .audioOnly) stableMatch=\(self?.stablePlayerViewModel === playerViewModel)")
             guard let self,
                   let playerViewModel,
                   self.stablePlayerViewModel === playerViewModel
