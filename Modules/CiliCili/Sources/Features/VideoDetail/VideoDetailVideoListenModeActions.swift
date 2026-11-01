@@ -186,7 +186,7 @@ extension VideoDetailViewModel {
         let shouldResumePlayback = currentPlaybackIntent()
             || (isEnabled && stablePlayerViewModel?.hasPresentedPlayback != true)
         let playbackRate = stablePlayerViewModel?.playbackRate ?? .x10
-        PlayerMetricsLog.notice("listenMode enabled=\(isEnabled) resume=\(shouldResumePlayback)")
+        PlayerMetricsLog.record(.playbackRecovery, metricsID: detail.bvid, title: detail.title, message: "listenMode enabled=\(isEnabled) resume=\(shouldResumePlayback)")
         cancelHLSRenditionPrebuildTask()
         cancelSeekWarmups()
         playbackContentMode = nextMode
@@ -307,7 +307,7 @@ extension VideoDetailViewModel {
         direction: VideoListenAdvanceDirection,
         reason: VideoListenAdvanceReason
     ) {
-        PlayerMetricsLog.notice("advance enter dir=\(String(describing: direction)) reason=\(String(describing: reason)) mode=\(String(describing: playbackContentMode)) invalidated=\(isPlaybackInvalidatedForNavigation)")
+        PlayerMetricsLog.record(.playbackRecovery, metricsID: detail.bvid, title: detail.title, message: "advance enter dir=\(String(describing: direction)) reason=\(String(describing: reason)) mode=\(String(describing: playbackContentMode)) invalidated=\(isPlaybackInvalidatedForNavigation)")
         guard playbackContentMode == .audioOnly,
               !isPlaybackInvalidatedForNavigation
         else { return }
@@ -330,7 +330,7 @@ extension VideoDetailViewModel {
         let task = Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             await self.prepareVideoListenQueue()
-            PlayerMetricsLog.notice("advance prepared cancelled=\(Task.isCancelled) contextCurrent=\(self.isCurrentPlaybackContext(bvid: sourceBVID, cid: sourceCID)) queue=\(self.videoListenQueueEntries.count)")
+            PlayerMetricsLog.record(.playbackRecovery, metricsID: sourceBVID, title: self.detail.title, message: "advance prepared cancelled=\(Task.isCancelled) contextCurrent=\(self.isCurrentPlaybackContext(bvid: sourceBVID, cid: sourceCID)) queue=\(self.videoListenQueueEntries.count)")
             guard !Task.isCancelled,
                   self.isCurrentPlaybackContext(bvid: sourceBVID, cid: sourceCID)
             else { return }
@@ -350,7 +350,7 @@ extension VideoDetailViewModel {
                 )
             }
             guard let targetVideo else {
-                PlayerMetricsLog.notice("advance targetNil dir=\(String(describing: direction)) entries=\(self.videoListenQueueEntries.count)")
+                PlayerMetricsLog.record(.playbackRecovery, metricsID: sourceBVID, title: self.detail.title, message: "advance targetNil dir=\(String(describing: direction)) entries=\(self.videoListenQueueEntries.count)")
                 if direction == .previous {
                     self.stablePlayerViewModel?.seek(to: 0)
                     self.stablePlayerViewModel?.play()
@@ -358,7 +358,7 @@ extension VideoDetailViewModel {
                 self.updateVideoListenRemoteNavigationAvailability()
                 return
             }
-            PlayerMetricsLog.notice("advance target=\(targetVideo.bvid) title=\(targetVideo.title.prefix(12)))")
+            PlayerMetricsLog.record(.playbackRecovery, metricsID: targetVideo.bvid, title: self.detail.title, message: "advance target=\(targetVideo.bvid)")
             self.beginVideoListenAdvance(
                 target: VideoListenQueueBuilder.contentKey(for: targetVideo),
                 reason: reason
@@ -1294,7 +1294,7 @@ extension VideoDetailViewModel {
     }
 
     func handleVideoListenPlaybackEnded() {
-        PlayerMetricsLog.notice("handleEnd mode=\(String(describing: playbackContentMode)) invalidated=\(isPlaybackInvalidatedForNavigation)")
+        PlayerMetricsLog.record(.playbackRecovery, metricsID: detail.bvid, title: detail.title, message: "handleEnd mode=\(String(describing: playbackContentMode)) invalidated=\(isPlaybackInvalidatedForNavigation)")
         guard playbackContentMode == .audioOnly,
               !isPlaybackInvalidatedForNavigation
         else { return }
@@ -1303,7 +1303,7 @@ extension VideoDetailViewModel {
             playbackOrder: libraryStore.videoListenPlaybackOrder,
             sleepTimerOption: videoListenSleepTimerOption
         )
-        PlayerMetricsLog.notice("handleEnd action=\(String(describing: action)) order=\(String(describing: libraryStore.videoListenPlaybackOrder)) timer=\(String(describing: videoListenSleepTimerOption))")
+        PlayerMetricsLog.record(.playbackRecovery, metricsID: detail.bvid, title: detail.title, message: "handleEnd action=\(String(describing: action)) order=\(String(describing: libraryStore.videoListenPlaybackOrder)) timer=\(String(describing: videoListenSleepTimerOption))")
         if videoListenSleepTimerOption == .endOfCurrent {
             cancelVideoListenSleepTimer()
         }
