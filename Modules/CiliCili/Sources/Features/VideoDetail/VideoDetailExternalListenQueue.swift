@@ -2,7 +2,12 @@ import Foundation
 
 extension VideoDetailViewModel {
     var externalListenPlaybackSnapshot: CiliCiliListenPlaybackSnapshot? {
-        guard playbackContentMode == .audioOnly else { return nil }
+        // 只有真正把播放交给宿主之后才读宿主的快照；否则 Beans 里残留的
+        // B 站音频会把内部播放器的续播时间/播放意图带偏。
+        guard playbackContentMode == .audioOnly,
+              externalListenIdentity != nil,
+              CiliCiliRuntime.shared.usesExternalVideoListenPlayer
+        else { return nil }
         return CiliCiliRuntime.shared.onVideoListenPlaybackSnapshot?(listenRequest(video: detail, cid: selectedCID ?? detail.cid))
     }
 
@@ -17,6 +22,7 @@ extension VideoDetailViewModel {
     @discardableResult
     func startExternalVideoListenIfNeeded(resumeTimeOverride: TimeInterval?, shouldResumePlayback: Bool?) -> Bool {
         guard playbackContentMode == .audioOnly,
+              CiliCiliRuntime.shared.usesExternalVideoListenPlayer,
               let handler = CiliCiliRuntime.shared.onVideoListenModeChange,
               let audio = resolvedVideoListenAudioVariant else { return false }
         let request = externalVideoListenRequest
@@ -32,6 +38,10 @@ extension VideoDetailViewModel {
         externalListenIdentity = identity
         stablePlayerViewModel?.stop()
         stablePlayerViewModel = nil
+        // 交接后详情页没有播放器，身份必须失效；否则切回视频时
+        // applyStableIdentityResumeIfNeeded 会认为「同一个播放器」直接返回，
+        // 不会重建视频源，页面永久停在 --:--。
+        stablePlayerIdentity = nil
         isSwitchingVideoListenMode = false
         handler(request, true, resume, autoplay)
         // Metadata tasks must not wait forever for a video frame from a player

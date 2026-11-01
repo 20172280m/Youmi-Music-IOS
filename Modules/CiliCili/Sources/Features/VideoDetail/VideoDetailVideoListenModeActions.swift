@@ -154,7 +154,7 @@ extension VideoDetailViewModel {
             preservesPreviousPlayerUntilFirstFrame: shouldResumePlayback,
             usesSeamlessPlaybackHandoff: shouldResumePlayback
         )
-        if !shouldResumePlayback {
+        if !shouldResumePlayback || stablePlayerViewModel == nil {
             isSwitchingVideoListenMode = false
         }
     }
@@ -170,7 +170,11 @@ extension VideoDetailViewModel {
         guard nextMode != playbackContentMode else { return }
         if isEnabled {
             guard resolvedVideoListenAudioVariant != nil
-            else { return }
+            else {
+                // 不静默吞掉：开关看起来切了、面板却没有片源，正是这次要修的缺陷。
+                playbackFallbackMessage = "当前分 P 没有独立音频，无法进入听视频"
+                return
+            }
         } else {
             guard variant.videoURL != nil else { return }
         }
@@ -197,7 +201,9 @@ extension VideoDetailViewModel {
         let externalRequest = externalVideoListenRequest
         if !isEnabled {
             externalListenIdentity = nil
-            externalHandler?(externalRequest, false, resumeTime, shouldResumePlayback)
+            if CiliCiliRuntime.shared.usesExternalVideoListenPlayer {
+                externalHandler?(externalRequest, false, resumeTime, shouldResumePlayback)
+            }
         }
         if isEnabled, startExternalVideoListenIfNeeded(resumeTimeOverride: resumeTime,
                                                        shouldResumePlayback: shouldResumePlayback) { return }
@@ -208,7 +214,9 @@ extension VideoDetailViewModel {
             preservesPreviousPlayerUntilFirstFrame: shouldResumePlayback,
             usesSeamlessPlaybackHandoff: shouldResumePlayback
         )
-        if !shouldResumePlayback {
+        if !shouldResumePlayback || stablePlayerViewModel == nil {
+            // 没有建出播放器时不能让切换态永久留成 true：后续所有听/看切换
+            // 都会被 isSwitchingVideoListenMode 的 guard 挡掉。
             isSwitchingVideoListenMode = false
         }
     }

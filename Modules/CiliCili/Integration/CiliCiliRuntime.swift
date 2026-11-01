@@ -24,8 +24,19 @@ public final class CiliCiliRuntime: ObservableObject {
     private var lastExportedIdentity = ""
     private var pendingLegacySession: (cookie: String, name: String, id: String, avatar: String?)?
 
+    /// 听视频是否交给宿主（Beans）播放器播放。
+    ///
+    /// 交接后详情页没有自己的 `PlayerStateViewModel`，听视频面板的时间、
+    /// 进度和控件需要由宿主播放器的快照反向驱动；这套镜像尚未实现，
+    /// 交接后的 Beans `AVPlayerItem` 在当前 CDN 上也不会起播（详情页只剩
+    /// `--:-- / --:--`，按播放无反应）。因此默认关闭交接，听视频走 CiliCili
+    /// 自带的 audio-only 播放器：片源来自详情页已经拿到的 `PlayURLData`，
+    /// 音频变体、队列续页、失败降级和进度 UI 都是现成的。
+    /// 宿主要重新启用时把它设为 true，并先补齐播放快照镜像与控件转发。
+    public var isExternalVideoListenPlayerEnabled = false
+
     public var usesExternalVideoListenPlayer: Bool {
-        onVideoListenModeChange != nil
+        isExternalVideoListenPlayerEnabled && onVideoListenModeChange != nil
     }
 
     private init() {
