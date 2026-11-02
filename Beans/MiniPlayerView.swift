@@ -95,7 +95,7 @@ struct MiniPlayerView: View {
 
             // 咪咕这类要走第三方音源兜底的歌，点下去到真出声之间有 4–6 秒。
             // 那几秒暂停钮一动不动，看着像「点了没反应」；给个转圈，让人知道在连音源。
-            if player.isBuffering {
+            if player.isBuffering || player.isPreparingSource {
                 ProgressView()
                     .controlSize(.small)
                     .tint(.primary)

@@ -1659,7 +1659,7 @@ struct PlayerView: View {
                     player.togglePlayPause()
                 } label: {
                     // 走第三方音源兜底时这几秒在连音源，给转圈，别让按钮停在「暂停」上。
-                    if player.isBuffering {
+                    if player.isBuffering || player.isPreparingSource {
                         ProgressView()
                             .controlSize(.regular)
                             .frame(width: 58, height: 48)
@@ -3322,7 +3322,7 @@ struct PlayerView: View {
                 BeansHaptics.tap()
                 player.togglePlayPause()
             } label: {
-                if player.isBuffering {
+                if player.isBuffering || player.isPreparingSource {
                     ProgressView()
                         .controlSize(.regular)
                         .frame(width: 72, height: 64)
@@ -3562,7 +3562,7 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering)
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering || player.isPreparingSource)
                         .foregroundStyle(playerButtonStyle == .appleMusic ? Color.white : Color.black)
                         .frame(width: 46, height: 46)
                         .contentShape(Rectangle())
@@ -3741,7 +3741,7 @@ struct PlayerView: View {
             BeansHaptics.tap()
             player.togglePlayPause()
         } label: {
-            PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering)
+            PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering || player.isPreparingSource)
                 .foregroundStyle(layoutRenderingStyle == .appleMusic ? Color.black : playerButtonText)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {

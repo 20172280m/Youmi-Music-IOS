@@ -78,6 +78,9 @@ final class PlayerManager: NSObject, ObservableObject {
     @Published var currentIndex = 0
     @Published var isPlaying = false
     @Published var isBuffering = false
+    /// 从按下歌到真正出声之间（第三方音源兜底要 4–6 秒）为 true。
+    /// 和 isBuffering 分开：这段窗口里 AVPlayer 还没建好或还没开始，isBuffering 看不出「在连音源」。
+    @Published var isPreparingSource = false
     @Published var loadFailed = false
     /// 切歌代次：防止旧歌的 URL 解析任务覆盖新歌（快速切歌时）
     private var loadGeneration = 0
@@ -494,6 +497,7 @@ final class PlayerManager: NSObject, ObservableObject {
             clearAudioRecoveryIntent()
             player.playImmediately(atRate: Float(rate))
             isPlaying = true
+            isPreparingSource = false
             startListeningSegment()
             startAudioSessionWatchdogIfNeeded()
         }
@@ -571,6 +575,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 if shouldKeepPlaying {
                     self.player?.playImmediately(atRate: Float(self.rate))
                     self.isPlaying = true
+                    self.isPreparingSource = false
                     self.startListeningSegment()
                 }
                 self.updateNowPlaying()
@@ -771,6 +776,7 @@ final class PlayerManager: NSObject, ObservableObject {
     private func pausePlayback() {
         clearAudioRecoveryIntent()
         isPlaying = false
+        isPreparingSource = false
         player?.pause()
         stopListeningSegment()
         stopAudioSessionWatchdog()
@@ -837,6 +843,7 @@ final class PlayerManager: NSObject, ObservableObject {
         seek(to: 0)
         player?.playImmediately(atRate: Float(rate))
         isPlaying = true
+        isPreparingSource = false
         startListeningSegment()
         updateNowPlaying()
     }
@@ -886,6 +893,7 @@ final class PlayerManager: NSObject, ObservableObject {
         lyricProgress = initialProgress
         isPlaying = false
         isBuffering = true
+        isPreparingSource = true
         loadFailed = false
         pushHistory(song)
         savePersistedPlaybackState()
@@ -1528,6 +1536,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 }
                 if player.timeControlStatus == .playing, self.audioLossInProgress {
                     self.isPlaying = true
+                    self.isPreparingSource = false
                     self.startListeningSegment()
                 }
                 if player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
@@ -1589,6 +1598,7 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         player.playImmediately(atRate: Float(rate))
         isPlaying = true
+        isPreparingSource = false
         startListeningSegment()
         isBuffering = false
         loadFailed = false
@@ -2050,6 +2060,7 @@ final class PlayerManager: NSObject, ObservableObject {
         webDAVAudioLease = nil
         isPlaying = false
         isBuffering = false
+        isPreparingSource = false
         loadFailed = true
         updateNowPlaying()
         if showToast {
@@ -2613,6 +2624,7 @@ final class PlayerManager: NSObject, ObservableObject {
 
         currentPlayer.playImmediately(atRate: Float(rate))
         isPlaying = true
+        isPreparingSource = false
         startListeningSegment()
         isBuffering = false
         audioLossInProgress = false
@@ -2825,6 +2837,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 self.clearAudioRecoveryIntent()
                 self.player?.playImmediately(atRate: Float(self.rate))
                 self.isPlaying = true
+                self.isPreparingSource = false
                 self.startListeningSegment()
                 self.updateNowPlaying()
             }
