@@ -360,7 +360,7 @@ struct BeansDiagnosticsSettingsView: View {
                 diagnosticRow("歌曲", value: snapshot.title)
                 diagnosticRow("歌手", value: snapshot.artist)
                 diagnosticRow("时长", value: nowPlayingClock(snapshot.duration))
-                diagnosticRow("进度", value: nowPlayingClock(snapshot.elapsed))
+                diagnosticRow("进度", value: nowPlayingClock(extrapolatedElapsed(for: snapshot)))
                 diagnosticRow("倍速", value: String(format: "%.2f×", snapshot.rate))
                 diagnosticRow("状态", value: snapshot.state)
                 HStack(spacing: 8) {
@@ -393,6 +393,14 @@ struct BeansDiagnosticsSettingsView: View {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let total = Int(seconds)
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// 卡片上系统按「进度 + 倍速 × 经过时间」自己往前走，这块读数跟着同一个算法显示，
+    /// 不然写入之后不动，看着像进度卡住了。
+    private func extrapolatedElapsed(for snapshot: NowPlayingSnapshot) -> Double {
+        guard snapshot.rate > 0 else { return snapshot.elapsed }
+        let advanced = max(0, Date().timeIntervalSince(snapshot.date)) * snapshot.rate
+        return min(snapshot.duration, snapshot.elapsed + advanced)
     }
 
     var body: some View {
