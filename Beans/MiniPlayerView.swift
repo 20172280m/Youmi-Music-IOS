@@ -93,12 +93,22 @@ struct MiniPlayerView: View {
                 }
             }
 
-            PlayerTransportButton(
-                icon: player.isPlaying ? "pause.fill" : "play.fill",
-                label: player.isPlaying ? "暂停" : "播放",
-                weight: .bold
-            ) {
-                player.togglePlayPause()
+            // 咪咕这类要走第三方音源兜底的歌，点下去到真出声之间有 4–6 秒。
+            // 那几秒暂停钮一动不动，看着像「点了没反应」；给个转圈，让人知道在连音源。
+            if player.isBuffering {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(.primary)
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel("正在加载")
+            } else {
+                PlayerTransportButton(
+                    icon: player.isPlaying ? "pause.fill" : "play.fill",
+                    label: player.isPlaying ? "暂停" : "播放",
+                    weight: .bold
+                ) {
+                    player.togglePlayPause()
+                }
             }
 
             if !presentation.isInline {

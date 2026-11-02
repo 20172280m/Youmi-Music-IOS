@@ -1658,10 +1658,17 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 29, weight: .bold))
-                        .frame(width: 58, height: 48)
-                        .contentShape(Rectangle())
+                    // 走第三方音源兜底时这几秒在连音源，给转圈，别让按钮停在「暂停」上。
+                    if player.isBuffering {
+                        ProgressView()
+                            .controlSize(.regular)
+                            .frame(width: 58, height: 48)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 29, weight: .bold))
+                            .frame(width: 58, height: 48)
+                            .contentShape(Rectangle())
+                    }
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
@@ -3315,10 +3322,16 @@ struct PlayerView: View {
                 BeansHaptics.tap()
                 player.togglePlayPause()
             } label: {
-                Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 36, weight: .bold))
-                    .frame(width: 72, height: 64)
-                    .contentShape(Rectangle())
+                if player.isBuffering {
+                    ProgressView()
+                        .controlSize(.regular)
+                        .frame(width: 72, height: 64)
+                } else {
+                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 36, weight: .bold))
+                        .frame(width: 72, height: 64)
+                        .contentShape(Rectangle())
+                }
             }
             .buttonStyle(.plain)
             .frame(width: 76)
