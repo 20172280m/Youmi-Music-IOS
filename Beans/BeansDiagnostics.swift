@@ -378,16 +378,24 @@ struct BeansDiagnosticsSettingsView: View {
                         .foregroundStyle(Color.beansComment)
                 }
                 .font(BeansFont.appFont(12))
-                Text("更新于 \(snapshot.date.formatted(date: .omitted, time: .standard))")
+                Text("更新于 \(Self.nowPlayingTimeFormatter.string(from: snapshot.date))")
                     .font(BeansFont.appFont(11))
                     .foregroundStyle(Color.beansComment)
             }
         } else if let cleared = NowPlayingDiagnostics.lastClearedAt {
-            diagnosticRow("状态", value: "已清空 \(cleared.formatted(date: .omitted, time: .standard))")
+            diagnosticRow("状态", value: "已清空 \(Self.nowPlayingTimeFormatter.string(from: cleared))")
         } else {
             diagnosticRow("状态", value: "还没播放过")
         }
     }
+
+    /// 24 小时制，和同一屏上「构建 … UTC」的写法对齐，中文界面不出现 AM/PM。
+    private static let nowPlayingTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
 
     private func nowPlayingClock(_ seconds: Double) -> String {
         guard seconds.isFinite, seconds >= 0 else { return "0:00" }

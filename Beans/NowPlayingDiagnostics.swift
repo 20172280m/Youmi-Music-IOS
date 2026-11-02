@@ -19,8 +19,7 @@ struct NowPlayingSnapshot {
     let animatedArtwork: Int
 
     var artworkText: String {
-        let size = "\(Int(artworkSize.width))×\(Int(artworkSize.height))"
-        return animatedArtwork > 0 ? "\(size) · 动态 \(animatedArtwork) 项" : size
+        "\(Int(artworkSize.width))×\(Int(artworkSize.height))"
     }
 }
 
