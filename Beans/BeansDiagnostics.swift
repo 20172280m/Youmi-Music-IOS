@@ -353,6 +353,32 @@ struct BeansDiagnosticsSettingsView: View {
     @State private var showClearConfirm = false
     private var recentEntryCount: Int { diagnostics.recentEntries.count }
 
+    @ViewBuilder
+    private var nowPlayingReadout: some View {
+        if let snapshot = NowPlayingDiagnostics.last {
+            VStack(alignment: .leading, spacing: 6) {
+                diagnosticRow("歌曲", value: snapshot.title)
+                diagnosticRow("歌手", value: snapshot.artist)
+                diagnosticRow("时长", value: nowPlayingClock(snapshot.duration))
+                diagnosticRow("进度", value: nowPlayingClock(snapshot.elapsed))
+                diagnosticRow("速率", value: String(format: "%.2f", snapshot.rate))
+                diagnosticRow("状态", value: snapshot.state)
+                diagnosticRow("封面", value: snapshot.artworkText)
+                diagnosticRow("写入", value: snapshot.date.formatted(date: .omitted, time: .standard))
+            }
+        } else if let cleared = NowPlayingDiagnostics.lastClearedAt {
+            diagnosticRow("状态", value: "已清空 \(cleared.formatted(date: .omitted, time: .standard))")
+        } else {
+            diagnosticRow("状态", value: "还没播放过")
+        }
+    }
+
+    private func nowPlayingClock(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let total = Int(seconds)
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
     var body: some View {
         BeansNavigationStack {
             ScrollView {
@@ -397,6 +423,19 @@ struct BeansDiagnosticsSettingsView: View {
                                 .font(BeansFont.appFont(13, .medium))
                                 .foregroundStyle(Color.beansRedText)
                         }
+                    }
+                    .padding(16)
+                    .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("系统正在播放", systemImage: "lock.iphone")
+                            .font(BeansFont.appFont(17, .semibold))
+                            .foregroundStyle(Color.beansAmber)
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
+                            nowPlayingReadout
+                        }
+                        Text("锁屏、控制中心和灵动岛的卡片就读这份内容。模拟器不显示锁屏播放器，所以用这块读数确认信息真的写进去了；卡片长什么样要到真机上看。")
+                            .font(BeansFont.appFont(12))
+                            .foregroundStyle(Color.beansComment)
                     }
                     .padding(16)
                     .background { BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous), forceLiquid: true) }

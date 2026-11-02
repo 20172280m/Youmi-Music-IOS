@@ -2720,7 +2720,11 @@ final class PlayerManager: NSObject, ObservableObject {
             clearNowPlayingInfo()
             return
         }
-        guard let song = currentSong else { return }
+        guard let song = currentSong else {
+            // 队列空了且不在切歌/加载中：系统卡片不该继续挂着上一首。
+            if queue.isEmpty, !isPreparingSource, !isBuffering { clearNowPlayingInfo() }
+            return
+        }
         let sameSong = nowPlayingSongKey == song.identityKey
         var info: [String: Any] = [
             MPMediaItemPropertyTitle: song.name,
@@ -2761,12 +2765,24 @@ final class PlayerManager: NSObject, ObservableObject {
                             self.nowPlayingInfo[MPMediaItemPropertyArtwork] = artwork
                             self.publishNowPlayingInfo()
                         }
+                    } else {
+                        // 第三方源封面上游挂了：换成中性占位图，别让卡片空着一块。
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self,
+                                  self.currentSong?.identityKey == song.identityKey,
+                                  (CustomSongCoverStore.shared.url(for: song) ?? song.coverURL) == artworkURL else { return }
+                            guard self.nowPlayingEnabled else { return }
+                            self.nowPlayingSongKey = song.identityKey
+                            self.nowPlayingInfo[MPMediaItemPropertyArtwork] = self.fallbackNowPlayingArtwork()
+                            self.publishNowPlayingInfo()
+                        }
                     }
                 }
             }
             for (key, artwork) in lockScreenArtwork.artwork(sourceURL: artworkURL) { info[key] = artwork }
         } else {
             lastNowPlayingArtworkKey = nil
+            info[MPMediaItemPropertyArtwork] = fallbackNowPlayingArtwork()
         }
         nowPlayingSongKey = song.identityKey
         nowPlayingInfo = info
@@ -2804,7 +2820,28 @@ final class PlayerManager: NSObject, ObservableObject {
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+        recordNowPlayingSnapshot()
         Task { @MainActor in BeansNowPlayingLiveActivity.shared.update(song: self.currentSong, isPlaying: self.isPlaying) }
+    }
+
+    /// 给诊断页留一份「刚交给系统的是什么」的读数。模拟器看不见锁屏卡片，这是唯一能拿出的证据。
+    private func recordNowPlayingSnapshot() {
+        guard let song = currentSong else { return }
+        let artwork = nowPlayingInfo[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
+        let artworkSize = artwork.map { "\(Int($0.boundsSize.width))×\(Int($0.boundsSize.height))" } ?? "无"
+        let animated = nowPlayingInfo.keys.filter { $0.contains("AnimatedArtwork") }.count
+        NowPlayingDiagnostics.record(NowPlayingSnapshot(
+            date: Date(),
+            title: song.name,
+            artist: song.artists,
+            album: song.album,
+            duration: nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] as? Double ?? max(duration, song.duration),
+            elapsed: nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double ?? progress,
+            rate: nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] as? Double ?? 0,
+            state: isPlaying ? "播放中" : "暂停",
+            artwork: artworkSize,
+            animatedArtwork: animated
+        ))
     }
 
     private func clearNowPlayingInfo() {
@@ -2813,10 +2850,27 @@ final class PlayerManager: NSObject, ObservableObject {
         nowPlayingInfo = [:]
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         MPNowPlayingInfoCenter.default().playbackState = .stopped
+        NowPlayingDiagnostics.recordCleared()
         Task { @MainActor in BeansNowPlayingLiveActivity.shared.update(song: nil, isPlaying: false) }
     }
 
     func refreshLockScreenArtwork() { updateNowPlaying() }
+
+    /// 没有封面时用的中性方图（1024×1024，无圆角）。外观变了要换一张，所以缓存按外观分。
+    private func fallbackNowPlayingArtwork() -> MPMediaItemArtwork {
+        NowPlayingFallbackArtwork.mediaItemArtwork(for: currentInterfaceStyle())
+    }
+
+    private func currentInterfaceStyle() -> UIUserInterfaceStyle {
+        if Thread.isMainThread {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            if let style = scenes.first(where: { $0.activationState == .foregroundActive })?.traitCollection.userInterfaceStyle
+                ?? scenes.first?.traitCollection.userInterfaceStyle {
+                return style
+            }
+        }
+        return UITraitCollection.current.userInterfaceStyle
+    }
 
     private func setupRemoteCommands() {
         guard !remoteCommandsInstalled else { return }
