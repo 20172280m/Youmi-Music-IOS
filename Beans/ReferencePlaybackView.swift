@@ -912,7 +912,7 @@ struct AppleMusicPlaybackControls: View {
                         BeansHaptics.tap()
                         player.togglePlayPause()
                     } label: {
-                        PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24)
+                        PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 24, isBuffering: player.isBuffering)
                             .frame(width: 66, height: 66)
                             .foregroundStyle(primary)
                             .contentShape(Rectangle())

@@ -560,10 +560,24 @@ struct BeansSymbolReplace: ViewModifier {
 struct PlayPauseMorphIcon: View {
     let isPlaying: Bool
     var size: CGFloat = 22
+    /// 切歌那几秒在连音源（第三方兜底要 4–6 秒），显示转圈，别停在暂停符号上。
+    var isBuffering: Bool = false
 
     private var progress: CGFloat { isPlaying ? 1 : 0 }
 
     var body: some View {
+        if isBuffering {
+            ProgressView()
+                .controlSize(size >= 28 ? .regular : .small)
+                .tint(.primary)
+                .frame(width: size + 6, height: size + 6)
+                .accessibilityLabel("正在加载")
+        } else {
+            morphIcon
+        }
+    }
+
+    private var morphIcon: some View {
         ZStack {
             Image(systemName: "play.fill")
                 .font(.system(size: size, weight: .semibold))

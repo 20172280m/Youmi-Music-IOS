@@ -3562,7 +3562,7 @@ struct PlayerView: View {
                     BeansHaptics.tap()
                     player.togglePlayPause()
                 } label: {
-                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22)
+                    PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering)
                         .foregroundStyle(playerButtonStyle == .appleMusic ? Color.white : Color.black)
                         .frame(width: 46, height: 46)
                         .contentShape(Rectangle())
@@ -3741,7 +3741,7 @@ struct PlayerView: View {
             BeansHaptics.tap()
             player.togglePlayPause()
         } label: {
-            PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22)
+            PlayPauseMorphIcon(isPlaying: player.isPlaying, size: 22, isBuffering: player.isBuffering)
                 .foregroundStyle(layoutRenderingStyle == .appleMusic ? Color.black : playerButtonText)
                 .frame(width: primaryPlayerButtonSize, height: primaryPlayerButtonSize)
                 .background {
