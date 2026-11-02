@@ -2827,8 +2827,9 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 给诊断页留一份「刚交给系统的是什么」的读数。模拟器看不见锁屏卡片，这是唯一能拿出的证据。
     private func recordNowPlayingSnapshot() {
         guard let song = currentSong else { return }
-        let artwork = nowPlayingInfo[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork
-        let artworkSize = artwork.map { "\(Int($0.boundsSize.width))×\(Int($0.boundsSize.height))" } ?? "无"
+        let artworkURL = CustomSongCoverStore.shared.url(for: song) ?? song.coverURL
+        let cached = artworkURL.flatMap { Self.nowPlayingArtworkCache.object(forKey: $0 as NSURL) }
+        let shownArtwork = cached ?? NowPlayingFallbackArtwork.image(for: currentInterfaceStyle())
         let animated = nowPlayingInfo.keys.filter { $0.contains("AnimatedArtwork") }.count
         NowPlayingDiagnostics.record(NowPlayingSnapshot(
             date: Date(),
@@ -2838,8 +2839,9 @@ final class PlayerManager: NSObject, ObservableObject {
             duration: nowPlayingInfo[MPMediaItemPropertyPlaybackDuration] as? Double ?? max(duration, song.duration),
             elapsed: nowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? Double ?? progress,
             rate: nowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] as? Double ?? 0,
-            state: isPlaying ? "播放中" : "暂停",
-            artwork: artworkSize,
+            state: isPlaying ? "正在播放" : "已暂停",
+            artworkImage: shownArtwork,
+            artworkSize: shownArtwork.size,
             animatedArtwork: animated
         ))
     }

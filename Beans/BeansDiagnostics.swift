@@ -361,10 +361,26 @@ struct BeansDiagnosticsSettingsView: View {
                 diagnosticRow("歌手", value: snapshot.artist)
                 diagnosticRow("时长", value: nowPlayingClock(snapshot.duration))
                 diagnosticRow("进度", value: nowPlayingClock(snapshot.elapsed))
-                diagnosticRow("速率", value: String(format: "%.2f", snapshot.rate))
+                diagnosticRow("倍速", value: String(format: "%.2f×", snapshot.rate))
                 diagnosticRow("状态", value: snapshot.state)
-                diagnosticRow("封面", value: snapshot.artworkText)
-                diagnosticRow("写入", value: snapshot.date.formatted(date: .omitted, time: .standard))
+                HStack(spacing: 8) {
+                    Text("封面").foregroundStyle(Color.beansComment)
+                    Spacer()
+                    if let image = snapshot.artworkImage {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 28, height: 28)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    Text(snapshot.artworkText)
+                        .font(BeansFont.appFont(11))
+                        .foregroundStyle(Color.beansComment)
+                }
+                .font(BeansFont.appFont(12))
+                Text("更新于 \(snapshot.date.formatted(date: .omitted, time: .standard))")
+                    .font(BeansFont.appFont(11))
+                    .foregroundStyle(Color.beansComment)
             }
         } else if let cleared = NowPlayingDiagnostics.lastClearedAt {
             diagnosticRow("状态", value: "已清空 \(cleared.formatted(date: .omitted, time: .standard))")
