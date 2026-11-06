@@ -916,6 +916,14 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private let firstFrameProbe = FirstFrameProbe()
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        VideoDetailTransitionTiming.mark("detail.view.appear")
+        firstFrameProbe.fire(after: "detail")
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         VideoDetailTransitionTiming.mark("detail.view.gone")
