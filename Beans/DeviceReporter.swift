@@ -102,69 +102,15 @@ enum BeansBackendSettings {
     static let publicIDRevisionKey = "beans.backend.publicIDRevision"
 }
 
-/// 启动时向后台上报基础设备信息；IP 由后台从请求中获取。
+/// 只保留用户主动发起的动作（提交反馈、开发者工具里的查询）。
+/// 启动上报与在线心跳已在 2.0.4 移除：不再把设备型号、系统版本等送到作者服务器。
 @MainActor
 final class DeviceReporter {
     static let shared = DeviceReporter()
 
-    private var reported = false
-    private var heartbeatTask: Task<Void, Never>?
-    private var heartbeatInFlight = false
     private let apiEndpoint = URL(string: "http://189.24.78.193/beans")!
-    private let legacyHeartbeatEndpoint = URL(string: "http://189.24.78.193/beans/heartbeat")!
 
     private init() {}
-
-    deinit {
-        heartbeatTask?.cancel()
-    }
-
-    func reportLaunch() async {
-        guard !reported else { return }
-        reported = true
-        defer { startHeartbeatLoop() }
-        var payload = devicePayload()
-        payload["event"] = "register"
-        let publicIDRevision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
-
-        do {
-            let data = try await postJSON(to: endpoint(for: "register"), payload: payload)
-            applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
-        } catch {
-            // 保留已有心跳接口作为兼容兜底；新后端部署前不影响原有启动上报。
-            do {
-                let data = try await postJSON(to: legacyHeartbeatEndpoint, payload: payload)
-                applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
-            } catch {
-                BeansLogger.shared.log("设备启动信息上报失败：\(error.localizedDescription)", level: .debug)
-            }
-        }
-    }
-
-    /// 运行期间定时上报最后活跃时间，后台据此判断在线状态并实时刷新拉黑状态。
-    func reportHeartbeat() async {
-        guard !heartbeatInFlight else { return }
-        heartbeatInFlight = true
-        defer { heartbeatInFlight = false }
-        let publicIDRevision = UserDefaults.standard.integer(forKey: BeansBackendSettings.publicIDRevisionKey)
-        do {
-            let data = try await postJSON(to: endpoint(for: "heartbeat"), payload: devicePayload())
-            applyServerState(from: data, allowPublicIDUpdate: true, expectedPublicIDRevision: publicIDRevision)
-        } catch {
-            BeansLogger.shared.log("在线心跳上报失败：\(error.localizedDescription)", level: .debug)
-        }
-    }
-
-    private func startHeartbeatLoop() {
-        guard heartbeatTask == nil else { return }
-        heartbeatTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
-                guard !Task.isCancelled, let self else { return }
-                await self.reportHeartbeat()
-            }
-        }
-    }
 
     func submitFeedback(
         phoneModel: String,
@@ -565,9 +511,6 @@ final class DeviceReporter {
                    badgeStyle: badgeStyle
                ) {
                 BeansLogger.shared.log("专属 ID 请求未收到完整响应，但后台状态已确认，按成功处理", level: .debug)
-                if normalizedTarget.lowercased() == DeviceIdentity.userID.lowercased() {
-                    await reportHeartbeat()
-                }
                 return
             }
             throw error

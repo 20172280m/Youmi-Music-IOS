@@ -992,6 +992,16 @@ struct RichCommentComposerView: View {
 
     private let resolvedInputViewHeight: CGFloat = 216
 
+    /// 收起输入框：提请人（presenter）把 target 置空，没有回调时退回系统 dismiss。
+    /// 草稿归草稿字典所有，收起不清空——再打开还是原来那几句。
+    private func close() {
+        if let onDismiss {
+            onDismiss()
+        } else {
+            dismiss()
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if let authorName = target.authorName,
@@ -1033,6 +1043,12 @@ struct RichCommentComposerView: View {
             }
 
             HStack(spacing: 12) {
+                Button("取消", action: close)
+                    .buttonStyle(.plain)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dynamic.comment.composer.cancel")
+
                 Button(action: toggleEmotes) {
                     Image(systemName: inputMode == .emotes ? "keyboard" : "face.smiling")
                         .contentTransition(.symbolEffect(.replace))
@@ -1082,6 +1098,14 @@ struct RichCommentComposerView: View {
         .frame(maxWidth: .infinity)
         .biliGlassEffect(interactive: true, in: .rect(cornerRadius: 24, style: .continuous))
         .padding(12)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded { value in
+                    guard value.translation.height > 60,
+                          abs(value.translation.width) < abs(value.translation.height) else { return }
+                    close()
+                }
+        )
         .presentationBackground(Color.clear)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)

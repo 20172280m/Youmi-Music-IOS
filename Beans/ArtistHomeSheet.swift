@@ -6,6 +6,7 @@ import UIKit
 @MainActor
 struct ArtistHomeSheet: View {
     @EnvironmentObject private var theme: ThemeStore
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.dismiss) private var dismiss
     /// 以 overlay 形式而不是弹层呈现时，用它来关闭。
@@ -421,14 +422,21 @@ struct ArtistHomeSheet: View {
     }
 
     /// 常驻搜索框：输入即过滤热门歌曲与专辑，不弹独立窗口，不抢焦点。
+    /// 底用实色而不是材质：这框压在壁纸上，材质会跟着壁纸变白，占位字就压在同样的白上读不出来。
     private var artistSearchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(Color.beansComment)
-            TextField(beansLocalized("搜索歌手歌曲", "Search artist songs"), text: $searchText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .accessibilityIdentifier("beans.artist.searchField")
+            TextField(
+                "",
+                text: $searchText,
+                prompt: Text(beansLocalized("搜索歌手歌曲", "Search artist songs"))
+                    .foregroundColor(Color.beansComment)
+            )
+            .foregroundColor(Color.beansLabel)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.search)
+            .accessibilityIdentifier("beans.artist.searchField")
             if !searchText.isEmpty {
                 Button { searchText = "" } label: {
                     Image(systemName: "xmark.circle.fill").foregroundStyle(Color.beansComment)
@@ -438,7 +446,12 @@ struct ArtistHomeSheet: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+            shape
+                .fill(colorScheme == .dark ? (Color(hex: "#1C1C1E") ?? .black) : Color.white)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+        }
     }
 
     @ViewBuilder
