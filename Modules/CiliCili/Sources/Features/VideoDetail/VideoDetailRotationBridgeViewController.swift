@@ -120,6 +120,12 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
             isPortraitFullscreen: rotationCoordinator.isPortraitFullscreen
         )
         contentController.setSecondaryContentMounted(true)
+        // 只读打点：等评论区真正建完（两个 runloop）记一下「完整可用」的时刻。
+        DispatchQueue.main.async {
+            DispatchQueue.main.async {
+                VideoDetailTransitionTiming.mark("detail.complete")
+            }
+        }
         if rotationCoordinator.isTransitioning {
             recoverInterruptedRotationIfNeeded(reason: "viewDidAppear")
         } else {
