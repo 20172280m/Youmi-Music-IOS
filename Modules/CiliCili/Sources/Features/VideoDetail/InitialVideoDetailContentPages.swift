@@ -25,7 +25,9 @@ struct InitialVideoDetailDetailContentPage: View {
                 .padding(.horizontal, PlaybackDetailContentMetrics.horizontalPadding)
         }
 
-        if mountsSecondaryContent && !seedVideo.isPGCEpisode {
+        // 首屏也铺上相关推荐的骨架：之前只有次要内容挂载后才有，
+        // 冷启进详情时下半屏是一片空的，看上去像白了一下。
+        if !seedVideo.isPGCEpisode {
             InitialRelatedSection(layoutWidth: layoutWidth)
         }
     }
