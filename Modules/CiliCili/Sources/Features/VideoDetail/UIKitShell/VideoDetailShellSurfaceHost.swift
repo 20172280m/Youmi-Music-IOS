@@ -866,7 +866,9 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
         if fullscreenMode != nil || isPortraitFullscreen {
             onExitFullscreen()
         } else {
+            VideoDetailTransitionTiming.mark("back.tap")
             onNavigateBack()
+            VideoDetailTransitionTiming.mark("pop.begin")
         }
     }
 
@@ -926,7 +928,8 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
                 : usesFullscreenStatusChrome
                     ? AnyView(moreControlsButton)
                     : nil,
-            topLeadingControlsAccessory: keepsChromeMounted ? AnyView(backButton) : nil,
+            // 竖屏的返回键由页面自己常显（VideoDetailFallbackBackButton），这里只在横屏全屏时给播放器镀铬层补一个。
+            topLeadingControlsAccessory: keepsChromeMounted && isLandscape ? AnyView(backButton) : nil,
             isDanmakuEnabled: keepsChromeMounted && overlaySnapshot.isDanmakuEnabled && !isAudioOnlyPlayback,
             onToggleDanmaku: isAudioOnlyPlayback ? nil : onToggleDanmaku,
             onShowDanmakuSettings: isAudioOnlyPlayback ? nil : onShowDanmakuSettings,

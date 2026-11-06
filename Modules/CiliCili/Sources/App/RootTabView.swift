@@ -142,6 +142,7 @@ struct RootTabView: View {
     ) -> some View {
         NavigationStack(path: detailPath) {
             rootTabContentWithChrome(for: tab, detailPath: detailPath)
+                .onAppear { VideoDetailTransitionTiming.mark("home.onAppear") }
                 .toolbarVisibility(.visible, for: .navigationBar)
                 .toolbarBackground(.automatic, for: .navigationBar)
                 .navigationTitle(rootNavigationTitle(for: tab))
@@ -164,6 +165,10 @@ struct RootTabView: View {
                     path: detailPath,
                     api: dependencies.api
                 )
+        }
+        .onChange(of: detailPath.wrappedValue.count) { _, count in
+            // 0 = 详情页退完、栈回到主页；只是把这一刻记下来，不改任何行为。
+            VideoDetailTransitionTiming.mark(count == 0 ? "home.path.empty" : "detail.path.push")
         }
     }
 

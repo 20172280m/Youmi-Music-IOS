@@ -62,7 +62,10 @@ public final class CiliCiliRuntime: ObservableObject {
     public func setVideoDetailActive(_ active: Bool, owner: UUID) {
         if active { videoDetailOwners.insert(owner) } else { videoDetailOwners.remove(owner) }
         let value = !videoDetailOwners.isEmpty
-        if isVideoDetailActive != value { isVideoDetailActive = value }
+        if isVideoDetailActive != value {
+            isVideoDetailActive = value
+            VideoDetailTransitionTiming.mark(value ? "detail.on" : "detail.off")
+        }
     }
 
     public func setLiveRoomActive(_ active: Bool, owner: UUID) {

@@ -746,7 +746,9 @@ struct VideoDetailSwiftUIContainer: View {
                     onNavigateBack: onNavigateBack
                 )
 
-                if model.surfacePlayerViewModel == nil {
+                // 返回键常显：之前只在没有播放器画面时才挂，听视频那页要靠点一下画面
+                // 把播放器镀铬层叫出来才有返回键，等于把出口藏起来了。
+                if !layout.usesFullscreenLayout {
                     VideoDetailFallbackBackButton(action: onNavigateBack)
                         .padding(.leading, 12)
                         .padding(.top, model.rootSafeAreaInsets.top + 8)
@@ -757,7 +759,7 @@ struct VideoDetailSwiftUIContainer: View {
                         )
                         .zIndex(10)
 
-                    if viewModel.playbackContentMode == .audioOnly {
+                    if model.surfacePlayerViewModel == nil, viewModel.playbackContentMode == .audioOnly {
                         VideoDetailListenQueueButton { isListenQueuePresented = true }
                             .padding(.trailing, 12)
                             .padding(.bottom, 12)
@@ -772,6 +774,20 @@ struct VideoDetailSwiftUIContainer: View {
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+            // 左边缘右滑返回：系统的手势在这页被播放器表面吃掉，补一条自己的。
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20)
+                    .onEnded { value in
+                        guard !layout.usesFullscreenLayout,
+                              value.startLocation.x < 28,
+                              value.translation.width > 70,
+                              abs(value.translation.height) < 90 else { return }
+                        Haptics.light()
+                        VideoDetailTransitionTiming.mark("back.tap")
+                        onNavigateBack()
+                        VideoDetailTransitionTiming.mark("pop.begin")
+                    }
+            )
             .onAppear {
                 DispatchQueue.main.async {
                     model.synchronize(layout: layout)
