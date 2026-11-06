@@ -916,6 +916,11 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        VideoDetailTransitionTiming.mark("detail.view.gone")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
