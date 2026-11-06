@@ -142,7 +142,6 @@ struct RootTabView: View {
     ) -> some View {
         NavigationStack(path: detailPath) {
             rootTabContentWithChrome(for: tab, detailPath: detailPath)
-                .observeScrollPerformance("tab=\(tab.rawValue)")
                 .onAppear { VideoDetailTransitionTiming.mark("home.onAppear") }
                 .toolbarVisibility(.visible, for: .navigationBar)
                 .toolbarBackground(.automatic, for: .navigationBar)

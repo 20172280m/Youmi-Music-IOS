@@ -35,6 +35,10 @@ struct HomeFeedScrollView<FeedContent: View>: View {
                         feedContent: feedContent
                     )
                 }
+                .background {
+                    ScrollActivityObserver(name: "home-feed")
+                        .frame(width: 0, height: 0)
+                }
                 .id(HomeFeedScrollAnchor.top)
                 .background {
                     HomeFeedWidthReader()
