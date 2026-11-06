@@ -783,9 +783,7 @@ struct VideoDetailSwiftUIContainer: View {
                               value.translation.width > 70,
                               abs(value.translation.height) < 90 else { return }
                         Haptics.light()
-                        VideoDetailTransitionTiming.mark("back.tap")
                         onNavigateBack()
-                        VideoDetailTransitionTiming.mark("pop.begin")
                     }
             )
             .onAppear {

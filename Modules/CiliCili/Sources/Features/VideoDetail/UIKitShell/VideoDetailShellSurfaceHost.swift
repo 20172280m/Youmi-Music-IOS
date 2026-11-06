@@ -866,9 +866,7 @@ private struct SurfaceOnlyPlayerOverlayRoot: View {
         if fullscreenMode != nil || isPortraitFullscreen {
             onExitFullscreen()
         } else {
-            VideoDetailTransitionTiming.mark("back.tap")
             onNavigateBack()
-            VideoDetailTransitionTiming.mark("pop.begin")
         }
     }
 

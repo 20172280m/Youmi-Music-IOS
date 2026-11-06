@@ -274,8 +274,10 @@ final class VideoDetailRotationBridgeViewController: UIViewController {
         if rotationCoordinator.isLandscape || rotationCoordinator.isPortraitFullscreen {
             requestExitFullscreen()
         } else {
+            VideoDetailTransitionTiming.mark("back.tap")
             contentController.recoverStableLayout()
             contentController.navigateBack()
+            VideoDetailTransitionTiming.mark("pop.begin")
         }
     }
 
