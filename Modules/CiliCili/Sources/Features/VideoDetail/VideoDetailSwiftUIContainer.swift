@@ -918,6 +918,11 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
 
     private let firstFrameProbe = FirstFrameProbe()
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        VideoDetailTransitionTiming.mark("LOAD vc.willAppear")
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         VideoDetailTransitionTiming.mark("detail.view.appear")
