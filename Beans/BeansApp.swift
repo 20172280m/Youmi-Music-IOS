@@ -95,14 +95,10 @@ struct BeansApp: App {
                 player.restorePersistedPlayMode()
                 player.resumePersistedPlaybackIfEnabled()
                 FontManager.reinstallIfNeeded()
-                await RemoteControlStore.shared.refreshIfNeeded(force: true)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else { return }
                 HighRefreshKeeper.shared.startIfNeeded()
-                Task {
-                    await RemoteControlStore.shared.refreshIfNeeded()
-                }
             }
         }
     }

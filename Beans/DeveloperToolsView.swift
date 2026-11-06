@@ -24,11 +24,6 @@ struct DeveloperToolsView: View {
     @State private var showExclusiveIDGrant = false
     @State private var globalDownloadEnabled = false
     @State private var isLoadingGlobalDownload = false
-    @State private var announcementEnabled = false
-    @State private var announcementText = ""
-    @State private var announcementUpdatedAt = ""
-    @State private var isLoadingAnnouncement = false
-    @State private var isSavingAnnouncement = false
     @AppStorage("beans.developer.homeFrameMeter") private var homeFrameMeterEnabled = true
 
     private var appVersion: String {
@@ -56,7 +51,6 @@ struct DeveloperToolsView: View {
                         refreshCard
                         runtimeCard
                         downloadPermissionCard
-                        announcementCard
                         playbackCard
                         diagnosticsCard
                     }
@@ -79,7 +73,6 @@ struct DeveloperToolsView: View {
             refreshMonitor.start()
             Task {
                 await loadGlobalDownloadStatus()
-                await loadAnnouncement()
             }
         }
         .onDisappear { refreshMonitor.stop() }
@@ -173,64 +166,6 @@ struct DeveloperToolsView: View {
         }
     }
 
-    private var announcementCard: some View {
-        developerCard(title: "远程公告", icon: "megaphone", tint: Color.beansHighlight) {
-            Toggle("开放公告", isOn: $announcementEnabled)
-                .tint(Color.beansAmber)
-                .disabled(isLoadingAnnouncement || isSavingAnnouncement)
-
-            TextEditor(text: $announcementText)
-                .font(BeansFont.appFont(13))
-                .foregroundStyle(Color.beansLabel)
-                .frame(minHeight: 120)
-                .padding(8)
-                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.beansLabel.opacity(0.08), lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
-
-            HStack(spacing: 10) {
-                if !announcementUpdatedAt.isEmpty {
-                    Text("更新于 \(announcementUpdatedAt)")
-                        .font(BeansFont.appFont(10))
-                        .foregroundStyle(Color.beansComment)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button {
-                    Task { await loadAnnouncement() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.beansAmber)
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .disabled(isLoadingAnnouncement || isSavingAnnouncement)
-                Button {
-                    saveAnnouncement()
-                } label: {
-                    HStack(spacing: 6) {
-                        if isSavingAnnouncement {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                        Text(isSavingAnnouncement ? "保存中" : "保存公告")
-                    }
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                    .padding(.horizontal, 13)
-                    .frame(height: 34)
-                    .background { BeansSurface(shape: Capsule()) }
-                }
-                .buttonStyle(.plain)
-                .disabled(isLoadingAnnouncement || isSavingAnnouncement)
-            }
-        }
-    }
-
     private var downloadPermissionCard: some View {
         developerCard(title: "下载权限", icon: "arrow.down.circle", tint: Color.beansHighlight) {
             Toggle("临时开放所有用户下载", isOn: $globalDownloadEnabled)
@@ -293,41 +228,6 @@ struct DeveloperToolsView: View {
         } catch {
             globalDownloadEnabled.toggle()
             ToastCenter.shared.show(error.localizedDescription)
-        }
-    }
-
-    private func loadAnnouncement() async {
-        guard !isLoadingAnnouncement else { return }
-        isLoadingAnnouncement = true
-        defer { isLoadingAnnouncement = false }
-        do {
-            let result = try await DeviceReporter.shared.fetchDeveloperAnnouncement()
-            announcementEnabled = result.enabled
-            announcementText = result.announcement
-            announcementUpdatedAt = result.updatedAt
-        } catch {
-            BeansLogger.shared.log("开发者公告读取失败：\(error.localizedDescription)", level: .debug)
-        }
-    }
-
-    private func saveAnnouncement() {
-        guard !isSavingAnnouncement else { return }
-        isSavingAnnouncement = true
-        Task { @MainActor in
-            do {
-                let result = try await DeviceReporter.shared.updateDeveloperAnnouncement(
-                    enabled: announcementEnabled,
-                    text: announcementText
-                )
-                announcementEnabled = result.enabled
-                announcementText = result.announcement
-                announcementUpdatedAt = result.updatedAt
-                await RemoteControlStore.shared.refreshIfNeeded(force: true)
-                ToastCenter.shared.show(announcementEnabled ? "公告已开放" : "公告已关闭")
-            } catch {
-                ToastCenter.shared.show(error.localizedDescription)
-            }
-            isSavingAnnouncement = false
         }
     }
 

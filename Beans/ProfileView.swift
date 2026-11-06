@@ -160,8 +160,6 @@ struct ProfileView: View {
     @State private var updateShareFileURL: URL?
     @State private var didRefreshProfileAccount = false
     @State private var donationExpanded = false
-    @State private var remoteDonors: [Donor] = []
-    @State private var loadingRemoteDonors = false
     @State private var showWeChatOpenError = false
     @State private var showFeedback = false
     @State private var showAvatarPicker = false
@@ -1205,9 +1203,6 @@ struct ProfileView: View {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
                     donationExpanded.toggle()
                 }
-                if donationExpanded {
-                    Task { await refreshRemoteDonorsIfNeeded() }
-                }
             } label: {
                 HStack(spacing: 12) {
                     Image(systemName: "heart.circle.fill")
@@ -1263,7 +1258,7 @@ struct ProfileView: View {
                         .font(BeansFont.appFont(15, .semibold))
                         .foregroundStyle(Color.beansLabel)
                     Spacer()
-                    Text(loadingRemoteDonors ? "同步中" : "按金额排序")
+                    Text("按金额排序")
                         .font(BeansFont.appFont(11))
                         .foregroundStyle(Color.beansComment)
                 }
@@ -1361,57 +1356,15 @@ struct ProfileView: View {
     }
 
     private var displayedDonors: [Donor] {
-        remoteDonors.isEmpty ? Self.donors : remoteDonors
+        Self.donors
     }
 
     @MainActor
-    private func refreshRemoteDonorsIfNeeded() async {
-        guard !loadingRemoteDonors else { return }
-        loadingRemoteDonors = true
-        defer { loadingRemoteDonors = false }
-        guard let url = URL(string: "http://189.24.78.193/beans/sponsors.json") else { return }
-        do {
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 8
-            request.setValue("Beans-Music/\(UpdateChecker.currentVersion)", forHTTPHeaderField: "User-Agent")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return }
-            let payload = try JSONDecoder().decode(RemoteSponsorPayload.self, from: data)
-            guard payload.enabled else {
-                remoteDonors = []
-                return
-            }
-            let donors = payload.items
-                .filter { $0.visible != false && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .sorted { lhs, rhs in
-                    if lhs.sort != rhs.sort { return lhs.sort < rhs.sort }
-                    return lhs.amount > rhs.amount
-                }
-                .map { Donor(name: $0.name, amount: $0.amount) }
-            if !donors.isEmpty {
-                remoteDonors = donors
-            }
-        } catch {
-            // 网络失败时继续显示内置赞助名单，不打断用户浏览。
-        }
-    }
-
     private struct Donor {
         let name: String
         let amount: Double
     }
 
-    private struct RemoteSponsorPayload: Decodable {
-        let enabled: Bool
-        let items: [RemoteSponsorItem]
-    }
-
-    private struct RemoteSponsorItem: Decodable {
-        let name: String
-        let amount: Double
-        let sort: Int
-        let visible: Bool?
-    }
 
     private static let donors: [Donor] = [
         Donor(name: "WeChat", amount: 26.66),
