@@ -1043,8 +1043,11 @@ struct RichCommentComposerView: View {
             }
 
             HStack(spacing: 12) {
-                Button("取消", action: close)
-                    .buttonStyle(.plain)
+                Button(action: close) {
+                    // 用 verbatim：这个模块按系统语言查表，模拟器是英文，按钮会变成 Cancel。
+                    Text(verbatim: "取消")
+                }
+                .buttonStyle(.plain)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("dynamic.comment.composer.cancel")
