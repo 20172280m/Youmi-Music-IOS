@@ -163,12 +163,14 @@ final class UIKitPlayerSurfaceHostView: UIView {
         to playerViewModel: PlayerStateViewModel,
         startsPlayback: Bool
     ) {
+        VideoDetailTransitionTiming.mark("LOAD surface.begin")
         UIView.performWithoutAnimation {
             setNeedsLayout()
             layoutIfNeeded()
             hostingController.view.setNeedsLayout()
             hostingController.view.layoutIfNeeded()
         }
+        VideoDetailTransitionTiming.mark("LOAD surface.laidOut")
         guard let surfaceView = hostingController.view.firstVideoSurfaceContainerView else {
             return
         }
@@ -194,6 +196,7 @@ final class UIKitPlayerSurfaceHostView: UIView {
         if startsPlayback {
             playerViewModel.play()
         }
+        VideoDetailTransitionTiming.mark("LOAD surface.bound")
     }
 }
 
