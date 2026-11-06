@@ -6,7 +6,6 @@ import UIKit
 @MainActor
 struct ArtistHomeSheet: View {
     @EnvironmentObject private var theme: ThemeStore
-    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.dismiss) private var dismiss
     /// 以 overlay 形式而不是弹层呈现时，用它来关闭。
