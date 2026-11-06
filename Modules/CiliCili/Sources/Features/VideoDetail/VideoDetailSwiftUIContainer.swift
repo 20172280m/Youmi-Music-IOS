@@ -930,6 +930,7 @@ final class VideoDetailSwiftUIContainerViewController: UIViewController {
     }
 
     override func viewDidLoad() {
+        VideoDetailTransitionTiming.mark("LOAD vc.load")
         super.viewDidLoad()
         view.backgroundColor = .black
         addChild(hostingController)
