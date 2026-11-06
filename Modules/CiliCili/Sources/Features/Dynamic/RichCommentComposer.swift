@@ -1048,9 +1048,9 @@ struct RichCommentComposerView: View {
                     Text(verbatim: "取消")
                 }
                 .buttonStyle(.plain)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("dynamic.comment.composer.cancel")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+                .accessibilityIdentifier("dynamic.comment.composer.cancel")
 
                 Button(action: toggleEmotes) {
                     Image(systemName: inputMode == .emotes ? "keyboard" : "face.smiling")
