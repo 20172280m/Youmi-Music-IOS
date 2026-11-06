@@ -223,7 +223,6 @@ final class CoreVideoPlayerManager {
     func installPlayer(
         on surface: UIView? = nil
     ) -> VideoPlayerProtocol {
-        VideoDetailTransitionTiming.mark("LOAD player.install.begin")
         let player = makePlayer()
         if let surface {
             activePlayer?.detachSurface(surface)
@@ -231,7 +230,6 @@ final class CoreVideoPlayerManager {
         }
         activePlayer?.stop()
         activePlayer = player
-        VideoDetailTransitionTiming.mark("LOAD player.install.end")
         return player
     }
 

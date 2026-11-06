@@ -107,7 +107,6 @@ final class DirectUIKitPlayerSurfaceHostView: UIView, VideoDetailPlayerSurfaceHo
     }
 
     private func bindSurface(to playerViewModel: PlayerStateViewModel, startsPlayback: Bool) {
-        VideoDetailTransitionTiming.mark("LOAD surface.bind.begin")
         surfaceView.configureBoundsRefresh(for: playerViewModel)
         surfaceView.setPictureInPictureEnabled(isPictureInPictureEnabled)
         surfaceView.setShowsSystemPlaybackControls(false)
@@ -124,7 +123,6 @@ final class DirectUIKitPlayerSurfaceHostView: UIView, VideoDetailPlayerSurfaceHo
         if startsPlayback {
             playerViewModel.play()
         }
-        VideoDetailTransitionTiming.mark("LOAD surface.bind.end")
     }
 
 }

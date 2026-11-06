@@ -12,13 +12,10 @@ struct VideoDetailPlayerSurfaceRepresentable: UIViewRepresentable {
     let videoGravity: AVLayerVideoGravity
 
     func makeUIView(context _: Context) -> DirectUIKitPlayerSurfaceHostView {
-        VideoDetailTransitionTiming.mark("LOAD surface.make.begin")
-        let made = DirectUIKitPlayerSurfaceHostView(
+        DirectUIKitPlayerSurfaceHostView(
             viewModel: viewModel,
             isPictureInPictureEnabled: isPictureInPictureEnabled
         )
-        VideoDetailTransitionTiming.mark("LOAD surface.make.end")
-        return made
     }
 
     func updateUIView(

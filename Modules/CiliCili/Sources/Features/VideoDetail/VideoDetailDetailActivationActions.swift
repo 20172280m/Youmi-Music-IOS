@@ -9,7 +9,6 @@ extension VideoDetailViewModel {
         }
         didRecordDetailLoadedEvent = false
         PlayerMetricsLog.record(.detailLoadStart, metricsID: detail.bvid, title: detail.title)
-        VideoDetailTransitionTiming.mark("LOAD detail.begin")
     }
 
     func applyCachedDetailForFastStartIfAvailable() async -> Bool {
@@ -32,7 +31,6 @@ extension VideoDetailViewModel {
         guard canActivateDetailFromCurrentData else { return false }
 
         state = .loaded
-        VideoDetailTransitionTiming.mark("LOAD detail.ready src=\(source)")
         detailLoadElapsedMilliseconds = elapsedMilliseconds(since: detailLoadStartTime) ?? 0
         recordDetailLoadedIfNeeded(source: source)
         scheduleRelatedLoadAfterPlaybackStartIfNeeded()

@@ -6,7 +6,6 @@ extension VideoDetailViewModel {
         source: String
     ) -> (selectedVariant: PlayVariant?, targetVariant: PlayVariant?)? {
         lastPlayURLSource = source
-        VideoDetailTransitionTiming.mark("LOAD playurl.ready src=\(source)")
         playURLElapsedMilliseconds = elapsedMilliseconds(since: playURLLoadStartTime)
         failedPlayVariantIDs.removeAll()
 

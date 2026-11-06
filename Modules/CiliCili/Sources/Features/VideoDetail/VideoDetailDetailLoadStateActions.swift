@@ -12,7 +12,6 @@ extension VideoDetailViewModel {
     }
 
     func applyLoadedNetworkDetail(_ fullDetail: VideoItem, clearsCurrentDetailTask: Bool) {
-        VideoDetailTransitionTiming.mark("LOAD detail.arrived")
         detail = detail.mergingFilledValues(from: fullDetail)
         hasResolvedDetailMetadata = true
         syncCommentsRenderStore()

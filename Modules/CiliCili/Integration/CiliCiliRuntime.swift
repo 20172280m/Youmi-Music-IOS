@@ -64,7 +64,6 @@ public final class CiliCiliRuntime: ObservableObject {
         let value = !videoDetailOwners.isEmpty
         if isVideoDetailActive != value {
             isVideoDetailActive = value
-            VideoDetailTransitionTiming.mark(value ? "detail.on" : "detail.off")
         }
     }
 
